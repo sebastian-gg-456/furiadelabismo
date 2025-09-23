@@ -29,24 +29,36 @@ function crearMenuInicio() {
             margin-bottom: 50px;
             line-height: 1.1;
         }
-        .menu-btn {
-            color: #ffd600;
-            background: #f52222;
-            border: 2px solid #f52222;
-            font-size: 2.5rem;
-            font-family: Arial, Helvetica, sans-serif;
-            margin-bottom: 40px;
-            padding: 20px 40px;
-            border-radius: 4px;
+        .menu-btn.play-img {
+            padding: 0;
+            background: none;
+            border: none;
+            width: 423px;
+            height: 85px;
             cursor: pointer;
-            text-align: left;
-            width: 300px;
-            box-sizing: border-box;
-            outline: none;
-            transition: border 0.2s;
+            margin-bottom: 40px;
+        }
+        .menu-btn.play-img img {
+            width: 423px;
+            height: 85px;
+            display: block;
+        }
+        .menu-btn.confi-img {
+            padding: 0;
+            background: none;
+            border: none;
+            width: 419px;
+            height: 87px;
+            cursor: pointer;
+            margin-bottom: 40px;
+        }
+        .menu-btn.confi-img img {
+            width: 419px;
+            height: 87px;
+            display: block;
         }
         .menu-btn.selected {
-            border: 6px solid #ffd600;
+            outline: 4px solid #ffd600;
         }
     `;
     document.head.appendChild(style);
@@ -60,15 +72,25 @@ function crearMenuInicio() {
     titulo.className = 'menu-title';
     titulo.textContent = 'La furia del abismo';
 
-    // Botón Jugar
+    // Botón Jugar con imagen
     const btnJugar = document.createElement('button');
-    btnJugar.className = 'menu-btn';
-    btnJugar.textContent = 'Jugar';
+    btnJugar.className = 'menu-btn play-img';
+    const imgJugar = document.createElement('img');
+    imgJugar.src = 'public/assets/interfaz/play.png';
+    imgJugar.alt = 'Jugar';
+    imgJugar.width = 423;
+    imgJugar.height = 85;
+    btnJugar.appendChild(imgJugar);
 
-    // Botón Controles
+    // Botón Controles con imagen
     const btnControles = document.createElement('button');
-    btnControles.className = 'menu-btn';
-    btnControles.textContent = 'Controles';
+    btnControles.className = 'menu-btn confi-img';
+    const imgControles = document.createElement('img');
+    imgControles.src = 'public/assets/interfaz/confi.png';
+    imgControles.alt = 'Controles';
+    imgControles.width = 419;
+    imgControles.height = 87;
+    btnControles.appendChild(imgControles);
 
     // Eventos
     btnJugar.addEventListener('click', crearMenuModo);
@@ -105,478 +127,31 @@ function crearMenuInicio() {
     app.appendChild(menuContainer);
 }
 
-function crearMenuModo() {
-    const app = document.getElementById('app');
-    app.innerHTML = '';
-
-    // Estilos
-    const style = document.createElement('style');
-    style.textContent = `
-        body {
-            background-color: #3a47d5 !important;
-        }
-        #app {
-            height: 100vh;
-            width: 100vw;
-            display: flex;
-            flex-direction: row;
-            justify-content: center;
-            align-items: center;
-        }
-        .modo-btn {
-            background: #f52222;
-            color: #ffd600;
-            font-size: 4rem;
-            font-family: Arial, Helvetica, sans-serif;
-            border: none;
-            width: 40vw;
-            height: 60vh;
-            margin: 0 3vw;
-            border-radius: 10px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-            transition: background 0.2s, color 0.2s, border 0.2s;
-            outline: none;
-        }
-        .modo-btn.selected {
-            border: 6px solid #ffd600;
-        }
-    `;
-    document.head.appendChild(style);
-
-    // Botón Versus
-    const btnVersus = document.createElement('button');
-    btnVersus.className = 'modo-btn';
-    btnVersus.textContent = 'Versus';
-
-    // Botón Cooperativo
-    const btnCoop = document.createElement('button');
-    btnCoop.className = 'modo-btn';
-    btnCoop.textContent = 'Cooperativo';
-
-    // Navegación con teclado
-    const botones = [btnVersus, btnCoop];
-    let seleccionado = 0;
-    function actualizarSeleccion() {
-        botones.forEach((btn, i) => {
-            btn.classList.toggle('selected', i === seleccionado);
-        });
-    }
-    actualizarSeleccion();
-
-    document.onkeydown = function(e) {
-        if (e.key === 'ArrowRight') {
-            seleccionado = (seleccionado + 1) % botones.length;
-            actualizarSeleccion();
-        }
-        if (e.key === 'ArrowLeft') {
-            seleccionado = (seleccionado - 1 + botones.length) % botones.length;
-            actualizarSeleccion();
-        }
-        if (e.key === ' ' || e.key === 'Enter') {
-            botones[seleccionado].click();
-        }
-    };
-
-    // Eventos
-    btnVersus.addEventListener('click', crearMenuVersus);
-    btnCoop.addEventListener('click', crearMenuVersus);
-
-    // Contenedor de los botones
-    const modosContainer = document.createElement('div');
-    modosContainer.style.display = 'flex';
-    modosContainer.style.flexDirection = 'row';
-    modosContainer.style.justifyContent = 'center';
-    modosContainer.style.alignItems = 'center';
-    modosContainer.style.width = '100vw';
-    modosContainer.style.height = '100vh';
-
-    modosContainer.appendChild(btnVersus);
-    modosContainer.appendChild(btnCoop);
-
-    app.appendChild(modosContainer);
-}
-
-// MENÚ VERSUS (Selección de personajes para dos jugadores)
-function crearMenuVersus() {
-    const app = document.getElementById('app');
-    app.innerHTML = '';
-
-    // Estilos
-    const style = document.createElement('style');
-    style.textContent = `
-        body {
-            background-color: #3a47d5 !important;
-        }
-        #app {
-            height: 100vh;
-            width: 100vw;
-            display: flex;
-            flex-direction: row;
-            justify-content: center;
-            align-items: center;
-        }
-        .versus-container {
-            display: flex;
-            flex-direction: row;
-            justify-content: center;
-            align-items: center;
-            width: 100vw;
-            height: 100vh;
-            gap: 20px;
-        }
-        .personaje-card {
-            width: 22vw;
-            height: 85vh;
-            background: #000;
-            border: 4px solid transparent;
-            border-radius: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            margin: 0;
-            position: relative;
-            transition: border 0.2s, background 0.2s;
-        }
-        .personaje-card.habilitado {
-            cursor: pointer;
-        }
-        .personaje-card.bloqueado {
-            border: 4px solid #b06ca7;
-            background: #000;
-            opacity: 0.7;
-        }
-        .personaje-card.bloqueado .candado {
-            display: block;
-        }
-        .personaje-card .candado {
-            display: none;
-            width: 80px;
-            height: 80px;
-            background: #ffd600;
-            margin: 0 auto;
-            margin-top: 40px;
-            border-radius: 4px;
-            position: relative;
-        }
-        .personaje-card .candado::before {
-            content: '';
-            display: block;
-            width: 60px;
-            height: 30px;
-            border-radius: 30px 30px 0 0;
-            border: 6px solid #aaa;
-            border-bottom: none;
-            position: absolute;
-            left: 10px;
-            top: -28px;
-        }
-        .personaje-card.elegido-j1 {
-            background: #f52222;
-        }
-        .personaje-card.elegido-j2 {
-            background: #2222f5;
-        }
-        .personaje-card.seleccionado-j1 {
-            border: 6px solid #ffd600;
-        }
-        .personaje-card.seleccionado-j2 {
-            border: 6px solid #006400;
-        }
-        .personaje-card.seleccionado-ambos {
-            border-width: 6px;
-            border-style: solid;
-            border-image: linear-gradient(to right, #ffd600 50%, #006400 50%) 1;
-        }
-    `;
-    document.head.appendChild(style);
-
-    // Datos de personajes
-    const personajes = [
-        { nombre: 'Personaje 1', habilitado: true },
-        { nombre: 'Personaje 2', habilitado: true },
-        { nombre: 'Personaje 3', habilitado: false },
-        { nombre: 'Personaje 4', habilitado: false }
-    ];
-
-    // Estado de selección
-    let seleccionadoJ1 = 0; // Jugador 1 (flechas)
-    let seleccionadoJ2 = 1; // Jugador 2 (wasd)
-    let elegidoJ1 = null;
-    let elegidoJ2 = null;
-
-    // Crear cards
-    const versusContainer = document.createElement('div');
-    versusContainer.className = 'versus-container';
-    const cards = personajes.map((p, i) => {
-        const card = document.createElement('div');
-        card.className = 'personaje-card' + (p.habilitado ? ' habilitado' : ' bloqueado');
-        card.tabIndex = p.habilitado ? 0 : -1;
-
-        // Nombre del personaje
-        const nombre = document.createElement('div');
-        nombre.textContent = p.nombre;
-        nombre.style.color = p.habilitado ? '#ffd600' : '#fff';
-        nombre.style.fontSize = '3rem';
-        nombre.style.textAlign = 'center';
-        nombre.style.marginTop = '40px';
-
-        // Candado si está bloqueado
-        const candado = document.createElement('div');
-        candado.className = 'candado';
-
-        card.appendChild(nombre);
-        card.appendChild(candado);
-
-        versusContainer.appendChild(card);
-        return card;
-    });
-
-    // Actualizar visual de selección
-    function actualizarSeleccion() {
-        cards.forEach((card, i) => {
-            card.classList.remove('seleccionado-j1', 'seleccionado-j2', 'seleccionado-ambos', 'elegido-j1', 'elegido-j2');
-            // Selección visual
-            if (i === seleccionadoJ1 && i === seleccionadoJ2) {
-                card.classList.add('seleccionado-ambos');
-            } else {
-                if (i === seleccionadoJ1) card.classList.add('seleccionado-j1');
-                if (i === seleccionadoJ2) card.classList.add('seleccionado-j2');
-            }
-            // Elegido visual
-            if (i === elegidoJ1 && i === elegidoJ2) {
-                card.classList.add('elegido-j1', 'elegido-j2');
-            } else {
-                if (i === elegidoJ1) card.classList.add('elegido-j1');
-                if (i === elegidoJ2) card.classList.add('elegido-j2');
-            }
-        });
-
-        // Si ambos eligieron, ir al menú de mapas
-        if (elegidoJ1 !== null && elegidoJ2 !== null) {
-            setTimeout(crearMenuMapas, 500);
-        }
-    }
-    actualizarSeleccion();
-
-    // Click para elegir personaje (solo habilitados)
-    cards.forEach((card, i) => {
-        if (personajes[i].habilitado) {
-            card.addEventListener('click', () => {
-                // Por defecto, jugador 1 elige con click
-                elegidoJ1 = i;
-                actualizarSeleccion();
-            });
-        }
-    });
-
-    // Teclado para ambos jugadores
-    document.onkeydown = function(e) {
-        // Jugador 1 (flechas + espacio/enter)
-        if (['ArrowRight', 'ArrowLeft', ' ', 'Enter'].includes(e.key)) {
-            if (e.key === 'ArrowRight') {
-                do {
-                    seleccionadoJ1 = (seleccionadoJ1 + 1) % cards.length;
-                } while (!personajes[seleccionadoJ1].habilitado);
-                actualizarSeleccion();
-            }
-            if (e.key === 'ArrowLeft') {
-                do {
-                    seleccionadoJ1 = (seleccionadoJ1 - 1 + cards.length) % cards.length;
-                } while (!personajes[seleccionadoJ1].habilitado);
-                actualizarSeleccion();
-            }
-            if (e.key === ' ' || e.key === 'Enter') {
-                elegidoJ1 = seleccionadoJ1;
-                actualizarSeleccion();
-            }
-        }
-        // Jugador 2 (wasd + g)
-        if (['d', 'a', 'g', 'D', 'A', 'G'].includes(e.key)) {
-            if (e.key.toLowerCase() === 'd') {
-                do {
-                    seleccionadoJ2 = (seleccionadoJ2 + 1) % cards.length;
-                } while (!personajes[seleccionadoJ2].habilitado);
-                actualizarSeleccion();
-            }
-            if (e.key.toLowerCase() === 'a') {
-                do {
-                    seleccionadoJ2 = (seleccionadoJ2 - 1 + cards.length) % cards.length;
-                } while (!personajes[seleccionadoJ2].habilitado);
-                actualizarSeleccion();
-            }
-            if (e.key.toLowerCase() === 'g') {
-                elegidoJ2 = seleccionadoJ2;
-                actualizarSeleccion();
-            }
-        }
-    };
-
-    app.appendChild(versusContainer);
-}
-
-// MENÚ MAPAS (Carrusel)
-function crearMenuMapas() {
-    const app = document.getElementById('app');
-    app.innerHTML = '';
-
-    // Estilos
-    const style = document.createElement('style');
-    style.textContent = `
-        body {
-            background-color: #3a47d5 !important;
-        }
-        #app {
-            height: 100vh;
-            width: 100vw;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .mapa-carrusel-container {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            justify-content: center;
-            gap: 40px;
-            width: 100vw;
-            height: 100vh;
-        }
-        .mapa-arrow {
-            font-size: 5rem;
-            color: #ffd600;
-            background: none;
-            border: none;
-            cursor: pointer;
-            user-select: none;
-        }
-        .mapa-preview {
-            width: 600px;
-            height: 400px;
-            background: #222;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 8px solid #f52222;
-            border-radius: 20px;
-            box-sizing: border-box;
-            transition: border 0.2s, background 0.2s;
-            overflow: hidden;
-        }
-        .mapa-preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            border-radius: 12px;
-        }
-    `;
-    document.head.appendChild(style);
-
-    // Mapas de ejemplo
-    const mapas = [
-        { nombre: 'Playa', color: '#f5e642', img: 'public/mapas/playaprov.jpg' },
-        { nombre: 'Bosque', color: '#42f554', img: '' },
-        { nombre: 'Volcán', color: '#f54242', img: '' }
-    ];
-    let seleccionado = 0;
-
-    // Preload de la imagen principal
-    const preloadImg = new Image();
-    preloadImg.src = mapas[0].img;
-    preloadImg.onload = () => {
-        mostrarCarrusel();
-    };
-    preloadImg.onerror = () => {
-        // Si falla la carga, igual muestra el carrusel
-        mostrarCarrusel();
-    };
-
-    function mostrarCarrusel() {
-        app.innerHTML = '';
-        const container = document.createElement('div');
-        container.className = 'mapa-carrusel-container';
-
-        const btnIzq = document.createElement('button');
-        btnIzq.className = 'mapa-arrow';
-        btnIzq.textContent = '⟨';
-
-        const btnDer = document.createElement('button');
-        btnDer.className = 'mapa-arrow';
-        btnDer.textContent = '⟩';
-
-        const preview = document.createElement('div');
-        preview.className = 'mapa-preview';
-
-        function actualizarPreview() {
-            preview.innerHTML = '';
-            if (mapas[seleccionado].img) {
-                const img = document.createElement('img');
-                img.src = mapas[seleccionado].img;
-                img.alt = mapas[seleccionado].nombre;
-                preview.appendChild(img);
-            } else {
-                preview.style.background = mapas[seleccionado].color;
-            }
-        }
-        actualizarPreview();
-
-        btnIzq.addEventListener('click', () => {
-            seleccionado = (seleccionado - 1 + mapas.length) % mapas.length;
-            actualizarPreview();
-        });
-        btnDer.addEventListener('click', () => {
-            seleccionado = (seleccionado + 1) % mapas.length;
-            actualizarPreview();
-        });
-
-        // Teclado para carrusel
-        document.onkeydown = function(e) {
-            if (e.key === 'ArrowLeft') {
-                btnIzq.click();
-            }
-            if (e.key === 'ArrowRight') {
-                btnDer.click();
-            }
-            if (e.key === ' ' || e.key === 'Enter') {
-                iniciarPelea(mapas[seleccionado]);
-            }
-        };
-
-        container.appendChild(btnIzq);
-        container.appendChild(preview);
-        container.appendChild(btnDer);
-
-        app.appendChild(container);
-    }
-}
-
+// --- Reemplaza tu función iniciarPelea por esta versión limpia ---
 function iniciarPelea(mapa) {
     const app = document.getElementById('app');
     app.innerHTML = '';
 
-    // Fondo más ancho y centrado
+    // Ajusta el tamaño del contenedor al tamaño de la imagen
+    app.style.width = '1365px';
+    app.style.height = '599px';
+    app.style.margin = '0 auto';
+    app.style.position = 'relative';
+    app.style.overflow = 'hidden';
+
+    // Fondo con la imagen "playaprov.jpg" y escala exacta 1365x599
     app.style.background = mapa.img
-        ? `#87ceeb url('${mapa.img}') center center / 100vw 100vh no-repeat`
+        ? `#87ceeb url('${mapa.img}') center center / 1365px 599px no-repeat`
         : mapa.color;
 
     // Estilos extra
     const style = document.createElement('style');
     style.textContent = `
-        #app {
-            position: relative;
-            height: 90vh;
-            width: 100vw;
-            overflow: hidden;
-        }
         .barra-superior {
             position: absolute;
             top: 32px;
             left: 0;
-            width: 100vw;
+            width: 100%;
             height: 90px;
             display: flex;
             justify-content: space-between;
@@ -628,26 +203,20 @@ function iniciarPelea(mapa) {
         }
         .personaje {
             position: absolute;
-            bottom: 60px;
+            bottom: -5px;
             width: 80px;
             height: 160px;
-            background: #ffd600;
-            border: 4px solid #f52222;
-            border-radius: 8px;
-            z-index: 1;
-            transition: left 0.1s, right 0.1s;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
             image-rendering: pixelated;
         }
         .personaje.j1 {
             left: 40vw;
-            background: #42f554;
-            border-color: #006400;
+            background: none;
+            border: none;
         }
         .personaje.j2 {
             left: 52vw;
-            background: #ffd600;
-            border-color: #f52222;
+            background: none;
+            border: none;
         }
     `;
     document.head.appendChild(style);
@@ -680,10 +249,35 @@ function iniciarPelea(mapa) {
     const pj1 = document.createElement('div');
     pj1.className = 'personaje j1';
     pj1.style.left = '40vw';
+    pj1.style.bottom = '-5px';
+    pj1.style.background = 'none';
+    pj1.style.border = 'none';
+    // Imagen para personaje 1
+    const imgPJ1 = document.createElement('img');
+    imgPJ1.src = 'public/assets/player/player.jpg';
+    imgPJ1.alt = 'Jugador 1';
+    imgPJ1.style.width = '100%';
+    imgPJ1.style.height = '100%';
+    imgPJ1.style.objectFit = 'contain';
+    pj1.appendChild(imgPJ1);
 
+    // Personaje 2 (misma imagen y escala que el personaje 1)
     const pj2 = document.createElement('div');
     pj2.className = 'personaje j2';
     pj2.style.left = '52vw';
+    pj2.style.bottom = '-5px';
+    pj2.style.width = '80px';
+    pj2.style.height = '160px';
+    pj2.style.background = 'none';
+    pj2.style.border = 'none';
+    // Imagen para personaje 2 (puedes cambiar por spritesheet cuando quieras)
+    const imgPJ2 = document.createElement('img');
+    imgPJ2.src = 'public/assets/player/player.jpg'; // Cambia por spritesheet cuando lo necesites
+    imgPJ2.alt = 'Jugador 2';
+    imgPJ2.style.width = '100%';
+    imgPJ2.style.height = '100%';
+    imgPJ2.style.objectFit = 'contain';
+    pj2.appendChild(imgPJ2);
 
     app.appendChild(pj1);
     app.appendChild(pj2);
@@ -693,6 +287,13 @@ function iniciarPelea(mapa) {
     let posJ2 = 52;
     let vidaJ1 = 100, vidaJ2 = 100;
     let energiaJ1 = 100, energiaJ2 = 100;
+    let velYJ1 = 0, velYJ2 = 0;
+    let saltandoJ1 = false, saltandoJ2 = false;
+    let enSueloJ1 = true, enSueloJ2 = true;
+
+    // Movimiento continuo
+    let moviendoIzqJ1 = false, moviendoDerJ1 = false;
+    let moviendoIzqJ2 = false, moviendoDerJ2 = false;
 
     // Actualizar barras
     function actualizarHUD() {
@@ -703,27 +304,536 @@ function iniciarPelea(mapa) {
     }
     actualizarHUD();
 
-    // Movimiento
+    // Actualizar posición y salto
+    function actualizarPersonajes() {
+        pj1.style.left = posJ1 + 'vw';
+        pj2.style.left = posJ2 + 'vw';
+        pj1.style.bottom = Math.max(-5, velYJ1) + 'px';
+        pj2.style.bottom = Math.max(-5, velYJ2) + 'px';
+    }
+
+    // Parámetros de movimiento y salto
+    const velocidadMovimiento = 0.25; // Más lento, tipo caminar
+    const gravedad = 2.5;
+    const fuerzaSalto = 32; // Más alto y natural
+
+    // Loop de movimiento y salto
+    function loop() {
+        // Movimiento horizontal J1
+        if (moviendoIzqJ1) posJ1 = Math.max(0, posJ1 - velocidadMovimiento);
+        if (moviendoDerJ1) posJ1 = Math.min(90, posJ1 + velocidadMovimiento);
+        // Movimiento horizontal J2
+        if (moviendoIzqJ2) posJ2 = Math.max(0, posJ2 - velocidadMovimiento);
+        if (moviendoDerJ2) posJ2 = Math.min(90, posJ2 + velocidadMovimiento);
+
+        // Salto y gravedad J1
+        if (!enSueloJ1) {
+            velYJ1 -= gravedad;
+            if (velYJ1 <= -5) {
+                velYJ1 = -5;
+                enSueloJ1 = true;
+            }
+        }
+        // Salto y gravedad J2
+        if (!enSueloJ2) {
+            velYJ2 -= gravedad;
+            if (velYJ2 <= -5) {
+                velYJ2 = -5;
+                enSueloJ2 = true;
+            }
+        }
+
+        actualizarPersonajes();
+        requestAnimationFrame(loop);
+    }
+    loop();
+
+    // Teclas presionadas
     document.onkeydown = function(e) {
-        // Jugador 1 (flechas)
-        if (e.key === 'ArrowLeft') {
-            posJ1 = Math.max(0, posJ1 - 2);
-            pj1.style.left = posJ1 + 'vw';
+        // Movimiento J1 (flechas)
+        if (e.key === 'ArrowLeft') moviendoIzqJ1 = true;
+        if (e.key === 'ArrowRight') moviendoDerJ1 = true;
+        // Salto J1 (flecha arriba)
+        if (e.key === 'ArrowUp' && enSueloJ1) {
+            velYJ1 = fuerzaSalto;
+            enSueloJ1 = false;
         }
-        if (e.key === 'ArrowRight') {
-            posJ1 = Math.min(90, posJ1 + 2);
-            pj1.style.left = posJ1 + 'vw';
+        // Golpe J1 (tecla "v")
+        if (e.key.toLowerCase() === 'v') {
+            vidaJ2 = Math.max(0, vidaJ2 - 10);
+            actualizarHUD();
         }
-        // Jugador 2 (A/D)
-        if (e.key.toLowerCase() === 'a') {
-            posJ2 = Math.max(0, posJ2 - 2);
-            pj2.style.left = posJ2 + 'vw';
+
+        // Movimiento J2 (A/D)
+        if (e.key.toLowerCase() === 'a') moviendoIzqJ2 = true;
+        if (e.key.toLowerCase() === 'd') moviendoDerJ2 = true;
+        // Salto J2 (W)
+        if (e.key.toLowerCase() === 'w' && enSueloJ2) {
+            velYJ2 = fuerzaSalto;
+            enSueloJ2 = false;
         }
-        if (e.key.toLowerCase() === 'd') {
-            posJ2 = Math.min(90, posJ2 + 2);
-            pj2.style.left = posJ2 + 'vw';
+        // Golpe J2 (tecla "1")
+        if (e.key === '1') {
+            vidaJ1 = Math.max(0, vidaJ1 - 10);
+            actualizarHUD();
         }
     };
+
+    document.onkeyup = function(e) {
+        // Movimiento J1
+        if (e.key === 'ArrowLeft') moviendoIzqJ1 = false;
+        if (e.key === 'ArrowRight') moviendoDerJ1 = false;
+        // Movimiento J2
+        if (e.key.toLowerCase() === 'a') moviendoIzqJ2 = false;
+        if (e.key.toLowerCase() === 'd') moviendoDerJ2 = false;
+    };
+}
+
+function crearMenuModo() {
+    const app = document.getElementById('app');
+    app.innerHTML = '';
+
+    // Estilos
+    const style = document.createElement('style');
+    style.textContent = `
+        #app {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #3a47d5;
+        }
+        .modo-container {
+            display: flex;
+            flex-direction: row;
+            gap: 120px;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+        }
+        .modo-btn.versus-img {
+            padding: 0;
+            background: none;
+            border: none;
+            width: 333px;
+            height: 357px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modo-btn.versus-img img {
+            width: 333px;
+            height: 357px;
+            display: block;
+        }
+        .modo-btn.coop-btn {
+            background: #f52222;
+            color: #ffd600;
+            font-size: 3rem;
+            font-family: Arial, Helvetica, sans-serif;
+            border: none;
+            width: 333px;
+            height: 357px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            transition: border 0.2s;
+            outline: none;
+        }
+        .modo-btn.selected {
+            outline: 6px solid #ffd600;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Contenedor de modos
+    const modosContainer = document.createElement('div');
+    modosContainer.className = 'modo-container';
+
+    // Botón Versus con imagen
+    const btnVersus = document.createElement('button');
+    btnVersus.className = 'modo-btn versus-img';
+    const imgVersus = document.createElement('img');
+    imgVersus.src = 'public/assets/interfaz/botvers.jpg';
+    imgVersus.alt = 'Versus';
+    imgVersus.width = 333;
+    imgVersus.height = 357;
+    btnVersus.appendChild(imgVersus);
+
+    // Botón Cooperativo (texto)
+    const btnCoop = document.createElement('button');
+    btnCoop.className = 'modo-btn coop-btn';
+    btnCoop.textContent = 'Cooperativo';
+
+    // Eventos para avanzar
+    btnVersus.addEventListener('click', crearMenuVersus);
+    btnCoop.addEventListener('click', () => {
+        alert('Modo Cooperativo seleccionado (implementa el menú de personajes aquí)');
+    });
+
+    // Navegación con teclado
+    const botones = [btnVersus, btnCoop];
+    let seleccionado = 0;
+    function actualizarSeleccion() {
+        botones.forEach((btn, i) => {
+            btn.classList.toggle('selected', i === seleccionado);
+        });
+    }
+    actualizarSeleccion();
+
+    document.onkeydown = function(e) {
+        if (e.key === 'ArrowRight') {
+            seleccionado = (seleccionado + 1) % botones.length;
+            actualizarSeleccion();
+        }
+        if (e.key === 'ArrowLeft') {
+            seleccionado = (seleccionado - 1 + botones.length) % botones.length;
+            actualizarSeleccion();
+        }
+        if (e.key === ' ' || e.key === 'Enter') {
+            botones[seleccionado].click();
+        }
+    };
+
+    modosContainer.appendChild(btnVersus);
+    modosContainer.appendChild(btnCoop);
+    app.appendChild(modosContainer);
+}
+
+function crearMenuVersus() {
+    const app = document.getElementById('app');
+    app.innerHTML = '';
+
+    // Personajes de ejemplo
+    const personajes = [
+        { nombre: 'KANDE', img: 'public/assets/player/player1.jpg' },
+        { nombre: 'MAFUYU', img: 'public/assets/player/player2.jpg' },
+        { nombre: 'ENA', img: 'public/assets/player/player3.jpg' },
+        { nombre: 'MIZUKI', img: 'public/assets/player/player4.jpg' }
+    ];
+
+    // Estilos
+    const style = document.createElement('style');
+    style.textContent = `
+        .personajes-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            height: 100vh;
+            gap: 40px;
+            background: #e5eafc;
+            position: relative;
+        }
+        .personaje-card {
+            width: 260px;
+            height: 500px;
+            background: rgba(255,255,255,0.95);
+            border: 6px solid transparent;
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            position: relative;
+            transition: border 0.2s;
+            cursor: pointer;
+        }
+        .personaje-card.selected-p1 {
+            border: 6px solid #ffd600;
+        }
+        .personaje-card.selected-p2 {
+            border: 6px solid #42f554;
+        }
+        .personaje-card.selected-ambos {
+            border-width: 6px;
+            border-style: solid;
+            border-image: linear-gradient(to right, #ffd600 50%, #42f554 50%) 1;
+        }
+        .personaje-card img {
+            width: 220px;
+            height: 340px;
+            object-fit: cover;
+            border-radius: 18px 18px 0 0;
+            margin-top: 24px;
+        }
+        .personaje-nombre {
+            font-size: 2.2rem;
+            font-family: Arial, Helvetica, sans-serif;
+            font-weight: bold;
+            color: #2d2d2d;
+            margin: 18px 0 10px 0;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+        .personaje-sub {
+            font-size: 1.1rem;
+            color: #555;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+        .selector-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: rgba(255,255,255,0.8);
+            padding: 4px 12px;
+            border-radius: 8px;
+            color: #222;
+            z-index: 2;
+        }
+        .selector-label.p1 {
+            border: 2px solid #ffd600;
+            color: #ffd600;
+        }
+        .selector-label.p2 {
+            border: 2px solid #42f554;
+            color: #42f554;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Estado de selección
+    let seleccionadoP1 = 0;
+    let seleccionadoP2 = 1;
+    let elegidoP1 = null;
+    let elegidoP2 = null;
+
+    // Crear tarjetas
+    const container = document.createElement('div');
+    container.className = 'personajes-container';
+    container.style.justifyContent = 'center';
+
+    const cards = personajes.map((p, i) => {
+        const card = document.createElement('div');
+        card.className = 'personaje-card';
+        const img = document.createElement('img');
+        img.src = p.img;
+        img.alt = p.nombre;
+        const nombre = document.createElement('div');
+        nombre.className = 'personaje-nombre';
+        nombre.textContent = p.nombre;
+        const sub = document.createElement('div');
+        sub.className = 'personaje-sub';
+        sub.textContent = 'Selecciona tu personaje';
+        card.appendChild(img);
+        card.appendChild(nombre);
+        card.appendChild(sub);
+        container.appendChild(card);
+        return card;
+    });
+
+    function actualizarSeleccion() {
+        cards.forEach((card, i) => {
+            card.classList.remove('selected-p1', 'selected-p2', 'selected-ambos');
+            // Etiquetas P1/P2
+            let label = card.querySelector('.selector-label');
+            if (label) card.removeChild(label);
+            if (i === seleccionadoP1 && i === seleccionadoP2) {
+                card.classList.add('selected-ambos');
+                // P1 label
+                const labelP1 = document.createElement('div');
+                labelP1.className = 'selector-label p1';
+                labelP1.textContent = 'P1';
+                card.appendChild(labelP1);
+                // P2 label
+                const labelP2 = document.createElement('div');
+                labelP2.className = 'selector-label p2';
+                labelP2.textContent = 'P2';
+                labelP2.style.top = '40px';
+                card.appendChild(labelP2);
+            } else {
+                if (i === seleccionadoP1) {
+                    card.classList.add('selected-p1');
+                    const labelP1 = document.createElement('div');
+                    labelP1.className = 'selector-label p1';
+                    labelP1.textContent = 'P1';
+                    card.appendChild(labelP1);
+                }
+                if (i === seleccionadoP2) {
+                    card.classList.add('selected-p2');
+                    const labelP2 = document.createElement('div');
+                    labelP2.className = 'selector-label p2';
+                    labelP2.textContent = 'P2';
+                    card.appendChild(labelP2);
+                }
+            }
+        });
+        // Si ambos eligieron, ir al menú de mapas
+        if (elegidoP1 !== null && elegidoP2 !== null) {
+            setTimeout(crearMenuMapas, 400);
+        }
+    }
+    actualizarSeleccion();
+
+    // Teclado para ambos jugadores
+    document.onkeydown = function(e) {
+        // Jugador 1 (flechas + enter)
+        if (['ArrowRight', 'ArrowLeft', 'Enter'].includes(e.key)) {
+            if (e.key === 'ArrowRight') {
+                seleccionadoP1 = (seleccionadoP1 + 1) % cards.length;
+                actualizarSeleccion();
+            }
+            if (e.key === 'ArrowLeft') {
+                seleccionadoP1 = (seleccionadoP1 - 1 + cards.length) % cards.length;
+                actualizarSeleccion();
+            }
+            if (e.key === 'Enter') {
+                elegidoP1 = seleccionadoP1;
+                actualizarSeleccion();
+            }
+        }
+        // Jugador 2 (A/D + espacio)
+        if (['a', 'd', 'A', 'D', ' '].includes(e.key)) {
+            if (e.key.toLowerCase() === 'd') {
+                seleccionadoP2 = (seleccionadoP2 + 1) % cards.length;
+                actualizarSeleccion();
+            }
+            if (e.key.toLowerCase() === 'a') {
+                seleccionadoP2 = (seleccionadoP2 - 1 + cards.length) % cards.length;
+                actualizarSeleccion();
+            }
+            if (e.key === ' ') {
+                elegidoP2 = seleccionadoP2;
+                actualizarSeleccion();
+            }
+        }
+    };
+
+    app.appendChild(container);
+}
+
+// Carrusel de mapas centrado
+function crearMenuMapas() {
+    const app = document.getElementById('app');
+    app.innerHTML = '';
+
+    // Ejemplo de mapas
+    const mapas = [
+        { nombre: 'Playa', img: 'public/mapas/playaprov.jpg' },
+        { nombre: 'Bosque', img: 'public/mapas/bosque.jpg' },
+        { nombre: 'Volcán', img: 'public/mapas/volcan.jpg' }
+    ];
+    let seleccionado = 0;
+
+    // Estilos
+    const style = document.createElement('style');
+    style.textContent = `
+        .mapa-carrusel-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            height: 100vh;
+            background: #e5eafc;
+            position: relative;
+        }
+        .mapa-arrow {
+            font-size: 5rem;
+            color: #ffd600;
+            background: none;
+            border: none;
+            cursor: pointer;
+            user-select: none;
+        }
+        .mapa-preview {
+            width: 800px;
+            height: 400px;
+            background: #222;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 8px solid #f52222;
+            border-radius: 20px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .mapa-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+        .jugar-btn {
+            position: absolute;
+            left: 50%;
+            bottom: 32px;
+            transform: translateX(-50%);
+            font-size: 1.5rem;
+            padding: 16px 48px;
+            background: #f52222;
+            color: #ffd600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-family: Arial, Helvetica, sans-serif;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+        }
+    `;
+    document.head.appendChild(style);
+
+    const container = document.createElement('div');
+    container.className = 'mapa-carrusel-container';
+
+    const btnIzq = document.createElement('button');
+    btnIzq.className = 'mapa-arrow';
+    btnIzq.textContent = '⟨';
+
+    const btnDer = document.createElement('button');
+    btnDer.className = 'mapa-arrow';
+    btnDer.textContent = '⟩';
+
+    const preview = document.createElement('div');
+    preview.className = 'mapa-preview';
+
+    function actualizarPreview() {
+        preview.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = mapas[seleccionado].img;
+        img.alt = mapas[seleccionado].nombre;
+        preview.appendChild(img);
+    }
+    actualizarPreview();
+
+    btnIzq.addEventListener('click', () => {
+        seleccionado = (seleccionado - 1 + mapas.length) % mapas.length;
+        actualizarPreview();
+    });
+    btnDer.addEventListener('click', () => {
+        seleccionado = (seleccionado + 1) % mapas.length;
+        actualizarPreview();
+    });
+
+    // Teclado para carrusel
+    document.onkeydown = function(e) {
+        if (e.key === 'ArrowLeft') btnIzq.click();
+        if (e.key === 'ArrowRight') btnDer.click();
+        if (e.key === ' ' || e.key === 'Enter') jugarBtn.click();
+    };
+
+    container.appendChild(btnIzq);
+    container.appendChild(preview);
+    container.appendChild(btnDer);
+
+    // Botón jugar
+    const jugarBtn = document.createElement('button');
+    jugarBtn.className = 'jugar-btn';
+    jugarBtn.textContent = 'Jugar';
+    jugarBtn.onclick = function() {
+        iniciarPelea(mapas[seleccionado]);
+    };
+
+    app.appendChild(container);
+    app.appendChild(jugarBtn);
 }
 
 export { crearMenuInicio };
