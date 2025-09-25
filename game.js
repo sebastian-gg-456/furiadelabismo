@@ -139,120 +139,57 @@ function iniciarPelea(mapa) {
     app.style.position = 'relative';
     app.style.overflow = 'hidden';
 
-    // Fondo con la imagen "playaprov.jpg" y escala exacta 1365x599
+    // Fondo
     app.style.background = mapa.img
         ? `#87ceeb url('${mapa.img}') center center / 1365px 599px no-repeat`
         : mapa.color;
 
-    // Estilos extra
-    const style = document.createElement('style');
-    style.textContent = `
-        .barra-superior {
-            position: absolute;
-            top: 32px;
-            left: 0;
-            width: 100%;
-            height: 90px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            z-index: 2;
-            pointer-events: none;
-        }
-        .hud-jugador {
-            width: 420px;
-            height: 90px;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            justify-content: flex-start;
-            margin: 0 20px;
-        }
-        .hud-jugador.derecha {
-            align-items: flex-end;
-        }
-        .vida-barra, .energia-barra {
-            width: 320px;
-            height: 18px;
-            margin-bottom: 8px;
-            background: #e53935;
-            image-rendering: pixelated;
-            border: 0;
-            border-radius: 0;
-            box-shadow: 0 0 0 4px #fff, 0 0 0 8px #222;
-            position: relative;
-            overflow: hidden;
-        }
-        .energia-barra {
-            height: 10px;
-            background: #00cfff;
-        }
-        .vida-barra .relleno {
-            background: #e53935;
-            height: 100%;
-            width: 100%;
-            image-rendering: pixelated;
-            transition: width 0.2s;
-        }
-        .energia-barra .relleno {
-            background: #00cfff;
-            height: 100%;
-            width: 100%;
-            image-rendering: pixelated;
-            transition: width 0.2s;
-        }
-        .personaje {
-            position: absolute;
-            bottom: -5px;
-            width: 80px;
-            height: 160px;
-            image-rendering: pixelated;
-        }
-        .personaje.j1 {
-            left: 40vw;
-            background: none;
-            border: none;
-        }
-        .personaje.j2 {
-            left: 52vw;
-            background: none;
-            border: none;
-        }
-    `;
-    document.head.appendChild(style);
+    // HUD barras de vida
+    const barra1 = document.createElement('div');
+    barra1.className = 'vida-barra';
+    barra1.style.position = 'absolute';
+    barra1.style.top = '32px';
+    barra1.style.left = '20px';
+    barra1.style.width = '320px';
+    barra1.style.height = '18px';
+    barra1.style.background = '#222';
+    barra1.style.border = '3px solid #222';
+    barra1.style.zIndex = '10';
+    const relleno1 = document.createElement('div');
+    relleno1.className = 'relleno';
+    relleno1.style.background = '#e53935';
+    relleno1.style.height = '100%';
+    relleno1.style.width = '100%';
+    barra1.appendChild(relleno1);
 
-    // Barra superior HUD
-    const barra = document.createElement('div');
-    barra.className = 'barra-superior';
+    const barra2 = document.createElement('div');
+    barra2.className = 'vida-barra';
+    barra2.style.position = 'absolute';
+    barra2.style.top = '32px';
+    barra2.style.right = '20px';
+    barra2.style.width = '320px';
+    barra2.style.height = '18px';
+    barra2.style.background = '#222';
+    barra2.style.border = '3px solid #222';
+    barra2.style.zIndex = '10';
+    const relleno2 = document.createElement('div');
+    relleno2.className = 'relleno';
+    relleno2.style.background = '#e53935';
+    relleno2.style.height = '100%';
+    relleno2.style.width = '100%';
+    barra2.appendChild(relleno2);
 
-    // HUD Jugador 1
-    const hud1 = document.createElement('div');
-    hud1.className = 'hud-jugador';
-    hud1.innerHTML = `
-        <div class="vida-barra"><div class="relleno" id="vida-j1"></div></div>
-        <div class="energia-barra"><div class="relleno" id="energia-j1"></div></div>
-    `;
-
-    // HUD Jugador 2
-    const hud2 = document.createElement('div');
-    hud2.className = 'hud-jugador derecha';
-    hud2.innerHTML = `
-        <div class="vida-barra"><div class="relleno" id="vida-j2"></div></div>
-        <div class="energia-barra"><div class="relleno" id="energia-j2"></div></div>
-    `;
-
-    barra.appendChild(hud1);
-    barra.appendChild(hud2);
-    app.appendChild(barra);
+    app.appendChild(barra1);
+    app.appendChild(barra2);
 
     // Personajes
     const pj1 = document.createElement('div');
     pj1.className = 'personaje j1';
     pj1.style.left = '40vw';
-    pj1.style.bottom = '-5px';
-    pj1.style.background = 'none';
-    pj1.style.border = 'none';
-    // Imagen para personaje 1
+    pj1.style.bottom = '0px';
+    pj1.style.width = '80px';
+    pj1.style.height = '160px';
+    pj1.style.position = 'absolute';
     const imgPJ1 = document.createElement('img');
     imgPJ1.src = 'public/assets/player/player.jpg';
     imgPJ1.alt = 'Jugador 1';
@@ -261,18 +198,15 @@ function iniciarPelea(mapa) {
     imgPJ1.style.objectFit = 'contain';
     pj1.appendChild(imgPJ1);
 
-    // Personaje 2 (misma imagen y escala que el personaje 1)
     const pj2 = document.createElement('div');
     pj2.className = 'personaje j2';
     pj2.style.left = '52vw';
-    pj2.style.bottom = '-5px';
+    pj2.style.bottom = '0px';
     pj2.style.width = '80px';
     pj2.style.height = '160px';
-    pj2.style.background = 'none';
-    pj2.style.border = 'none';
-    // Imagen para personaje 2 (puedes cambiar por spritesheet cuando quieras)
+    pj2.style.position = 'absolute';
     const imgPJ2 = document.createElement('img');
-    imgPJ2.src = 'public/assets/player/player.jpg'; // Cambia por spritesheet cuando lo necesites
+    imgPJ2.src = 'public/assets/player/player.jpg';
     imgPJ2.alt = 'Jugador 2';
     imgPJ2.style.width = '100%';
     imgPJ2.style.height = '100%';
@@ -282,65 +216,97 @@ function iniciarPelea(mapa) {
     app.appendChild(pj1);
     app.appendChild(pj2);
 
-    // Estado
-    let posJ1 = 40;
-    let posJ2 = 52;
-    let vidaJ1 = 100, vidaJ2 = 100;
-    let energiaJ1 = 100, energiaJ2 = 100;
-    let velYJ1 = 0, velYJ2 = 0;
-    let saltandoJ1 = false, saltandoJ2 = false;
-    let enSueloJ1 = true, enSueloJ2 = true;
+    // Estado de pelea
+    let vidaJ1 = 500, vidaJ2 = 500;
+    let posJ1 = 40, posJ2 = 52; // en vw
 
-    // Movimiento continuo
+    // Movimiento y salto
     let moviendoIzqJ1 = false, moviendoDerJ1 = false;
     let moviendoIzqJ2 = false, moviendoDerJ2 = false;
 
-    // Actualizar barras
+    // Dash/correr
+    let dashJ1 = false, dashJ2 = false;
+    let lastLeftJ1 = 0, lastRightJ1 = 0;
+    let lastLeftJ2 = 0, lastRightJ2 = 0;
+    const dashWindow = 220; // ms para doble pulsación
+
+    // Salto regulable
+    let yJ1 = 0, yJ2 = 0;
+    let velYJ1 = 0, velYJ2 = 0;
+    let saltandoJ1 = false, saltandoJ2 = false;
+    let saltoPresionadoJ1 = false, saltoPresionadoJ2 = false;
+    const sueloY = 0;
+    const saltoMaxY = 320; // Altura máxima (llega casi a las barras)
+    const fuerzaSalto = 13; // Fuerza por frame (subida)
+    const gravedad = 6;     // Caída más lenta
+
+    // Golpes
+    const golpeDistancia = 4; // distancia máxima para golpear
+    const golpeIman = 2.5;    // cuanto se acerca si está lejos
+
+    // Velocidades
+    const velocidadCaminar = 0.35; // más lento, caminar
+    const velocidadDash = 1.1;     // correr
+
+    // Actualizar barras de vida
     function actualizarHUD() {
-        document.getElementById('vida-j1').style.width = vidaJ1 + '%';
-        document.getElementById('vida-j2').style.width = vidaJ2 + '%';
-        document.getElementById('energia-j1').style.width = energiaJ1 + '%';
-        document.getElementById('energia-j2').style.width = energiaJ2 + '%';
+        relleno1.style.width = (vidaJ1 / 500 * 100) + '%';
+        relleno2.style.width = (vidaJ2 / 500 * 100) + '%';
     }
     actualizarHUD();
 
-    // Actualizar posición y salto
+    // Actualizar posiciones
     function actualizarPersonajes() {
         pj1.style.left = posJ1 + 'vw';
         pj2.style.left = posJ2 + 'vw';
-        pj1.style.bottom = Math.max(-5, velYJ1) + 'px';
-        pj2.style.bottom = Math.max(-5, velYJ2) + 'px';
+        pj1.style.bottom = yJ1 + 'px';
+        pj2.style.bottom = yJ2 + 'px';
     }
-
-    // Parámetros de movimiento y salto
-    const velocidadMovimiento = 0.25; // Más lento, tipo caminar
-    const gravedad = 2.5;
-    const fuerzaSalto = 32; // Más alto y natural
+    actualizarPersonajes();
 
     // Loop de movimiento y salto
     function loop() {
         // Movimiento horizontal J1
-        if (moviendoIzqJ1) posJ1 = Math.max(0, posJ1 - velocidadMovimiento);
-        if (moviendoDerJ1) posJ1 = Math.min(90, posJ1 + velocidadMovimiento);
+        if (moviendoIzqJ1) posJ1 = Math.max(0, posJ1 - (dashJ1 ? velocidadDash : velocidadCaminar));
+        if (moviendoDerJ1) posJ1 = Math.min(90, posJ1 + (dashJ1 ? velocidadDash : velocidadCaminar));
         // Movimiento horizontal J2
-        if (moviendoIzqJ2) posJ2 = Math.max(0, posJ2 - velocidadMovimiento);
-        if (moviendoDerJ2) posJ2 = Math.min(90, posJ2 + velocidadMovimiento);
+        if (moviendoIzqJ2) posJ2 = Math.max(0, posJ2 - (dashJ2 ? velocidadDash : velocidadCaminar));
+        if (moviendoDerJ2) posJ2 = Math.min(90, posJ2 + (dashJ2 ? velocidadDash : velocidadCaminar));
 
-        // Salto y gravedad J1
-        if (!enSueloJ1) {
+        // Salto J1 regulable con "w"
+        if (saltandoJ1 && saltoPresionadoJ1 && yJ1 < saltoMaxY) {
+            velYJ1 = fuerzaSalto;
+        } else {
             velYJ1 -= gravedad;
-            if (velYJ1 <= -5) {
-                velYJ1 = -5;
-                enSueloJ1 = true;
-            }
         }
-        // Salto y gravedad J2
-        if (!enSueloJ2) {
+        yJ1 += velYJ1;
+        if (yJ1 < sueloY) {
+            yJ1 = sueloY;
+            velYJ1 = 0;
+            saltandoJ1 = false;
+        }
+        if (yJ1 > saltoMaxY) {
+            yJ1 = saltoMaxY;
+            velYJ1 = 0;
+            saltoPresionadoJ1 = false;
+        }
+
+        // Salto J2 regulable con flecha arriba
+        if (saltandoJ2 && saltoPresionadoJ2 && yJ2 < saltoMaxY) {
+            velYJ2 = fuerzaSalto;
+        } else {
             velYJ2 -= gravedad;
-            if (velYJ2 <= -5) {
-                velYJ2 = -5;
-                enSueloJ2 = true;
-            }
+        }
+        yJ2 += velYJ2;
+        if (yJ2 < sueloY) {
+            yJ2 = sueloY;
+            velYJ2 = 0;
+            saltandoJ2 = false;
+        }
+        if (yJ2 > saltoMaxY) {
+            yJ2 = saltoMaxY;
+            velYJ2 = 0;
+            saltoPresionadoJ2 = false;
         }
 
         actualizarPersonajes();
@@ -350,42 +316,97 @@ function iniciarPelea(mapa) {
 
     // Teclas presionadas
     document.onkeydown = function(e) {
-        // Movimiento J1 (flechas)
-        if (e.key === 'ArrowLeft') moviendoIzqJ1 = true;
-        if (e.key === 'ArrowRight') moviendoDerJ1 = true;
-        // Salto J1 (flecha arriba)
-        if (e.key === 'ArrowUp' && enSueloJ1) {
-            velYJ1 = fuerzaSalto;
-            enSueloJ1 = false;
+        // DASH DETECTION J1
+        if (e.key.toLowerCase() === 'a') {
+            let now = Date.now();
+            if (now - lastLeftJ1 < dashWindow) dashJ1 = true;
+            lastLeftJ1 = now;
+            moviendoIzqJ1 = true;
+        }
+        if (e.key.toLowerCase() === 'd') {
+            let now = Date.now();
+            if (now - lastRightJ1 < dashWindow) dashJ1 = true;
+            lastRightJ1 = now;
+            moviendoDerJ1 = true;
+        }
+        // DASH DETECTION J2
+        if (e.key === 'ArrowLeft') {
+            let now = Date.now();
+            if (now - lastLeftJ2 < dashWindow) dashJ2 = true;
+            lastLeftJ2 = now;
+            moviendoIzqJ2 = true;
+        }
+        if (e.key === 'ArrowRight') {
+            let now = Date.now();
+            if (now - lastRightJ2 < dashWindow) dashJ2 = true;
+            lastRightJ2 = now;
+            moviendoDerJ2 = true;
+        }
+        // Salto J1 (W)
+        if (e.key.toLowerCase() === 'w' && !saltandoJ1 && yJ1 === sueloY) {
+            saltandoJ1 = true;
+            saltoPresionadoJ1 = true;
+        }
+        if (e.key.toLowerCase() === 'w' && saltandoJ1) {
+            saltoPresionadoJ1 = true;
         }
         // Golpe J1 (tecla "v")
         if (e.key.toLowerCase() === 'v') {
-            vidaJ2 = Math.max(0, vidaJ2 - 10);
-            actualizarHUD();
+            if (Math.abs(posJ1 - posJ2) <= golpeDistancia) {
+                vidaJ2 = Math.max(0, vidaJ2 - 10);
+                actualizarHUD();
+            } else {
+                if (posJ1 < posJ2) posJ1 += golpeIman;
+                else posJ1 -= golpeIman;
+                actualizarPersonajes();
+            }
         }
 
-        // Movimiento J2 (A/D)
-        if (e.key.toLowerCase() === 'a') moviendoIzqJ2 = true;
-        if (e.key.toLowerCase() === 'd') moviendoDerJ2 = true;
-        // Salto J2 (W)
-        if (e.key.toLowerCase() === 'w' && enSueloJ2) {
-            velYJ2 = fuerzaSalto;
-            enSueloJ2 = false;
+        // Salto J2 (flecha arriba)
+        if (e.key === 'ArrowUp' && !saltandoJ2 && yJ2 === sueloY) {
+            saltandoJ2 = true;
+            saltoPresionadoJ2 = true;
+        }
+        if (e.key === 'ArrowUp' && saltandoJ2) {
+            saltoPresionadoJ2 = true;
         }
         // Golpe J2 (tecla "1")
         if (e.key === '1') {
-            vidaJ1 = Math.max(0, vidaJ1 - 10);
-            actualizarHUD();
+            if (Math.abs(posJ1 - posJ2) <= golpeDistancia) {
+                vidaJ1 = Math.max(0, vidaJ1 - 10);
+                actualizarHUD();
+            } else {
+                if (posJ2 < posJ1) posJ2 += golpeIman;
+                else posJ2 -= golpeIman;
+                actualizarPersonajes();
+            }
         }
     };
 
     document.onkeyup = function(e) {
         // Movimiento J1
-        if (e.key === 'ArrowLeft') moviendoIzqJ1 = false;
-        if (e.key === 'ArrowRight') moviendoDerJ1 = false;
+        if (e.key.toLowerCase() === 'a') {
+            moviendoIzqJ1 = false;
+            dashJ1 = false;
+        }
+        if (e.key.toLowerCase() === 'd') {
+            moviendoDerJ1 = false;
+            dashJ1 = false;
+        }
+        // Salto J1 (W)
+        if (e.key.toLowerCase() === 'w') saltoPresionadoJ1 = false;
+
         // Movimiento J2
-        if (e.key.toLowerCase() === 'a') moviendoIzqJ2 = false;
-        if (e.key.toLowerCase() === 'd') moviendoDerJ2 = false;
+        if (e.key === 'ArrowLeft') {
+            moviendoIzqJ2 = false;
+            dashJ2 = false;
+        }
+        if (e.key === 'ArrowRight') {
+            moviendoDerJ2 = false;
+            dashJ2 = false;
+        }
+        // Salto J2 (flecha arriba)
+        if (e.key === 'ArrowUp') saltoPresionadoJ2 = false;
     };
 }
 
