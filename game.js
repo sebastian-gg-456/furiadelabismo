@@ -408,6 +408,360 @@ function iniciarPelea(mapa) {
         // Salto J2 (flecha arriba)
         if (e.key === 'ArrowUp') saltoPresionadoJ2 = false;
     };
+
+    // --- Animación para Kande (Gen) ---
+    let estadoPJ1 = 'quieto-der'; // quieto-der, quieto-izq, caminar-der, caminar-izq
+    let animFramePJ1 = 0;
+    let animTimeoutPJ1 = null;
+
+    // Helper para cargar animación Pixly
+    function cargarAnimacionPixly(animPath, callback) {
+        fetch(animPath)
+            .then(res => res.text())
+            .then(xml => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(xml, "application/xml");
+                const frames = Array.from(doc.querySelectorAll("Frame")).map(frame => {
+                    const region = frame.querySelector("Region");
+                    return {
+                        x: parseInt(region.getAttribute("x")),
+                        y: parseInt(region.getAttribute("y")),
+                        width: parseInt(region.getAttribute("width")),
+                        height: parseInt(region.getAttribute("height")),
+                        duration: parseInt(frame.getAttribute("duration"))
+                    };
+                });
+                callback(frames);
+            });
+    }
+
+    // Cambia el sprite del personaje 1 según estado
+    function actualizarSpritePJ1() {
+        clearTimeout(animTimeoutPJ1);
+
+        if (estadoPJ1 === 'quieto-der') {
+            imgPJ1.src = 'public/assets/player/pj1estaticoder.png';
+            imgPJ1.style.objectFit = 'contain';
+            imgPJ1.style.width = '100%';
+            imgPJ1.style.height = '100%';
+            imgPJ1.style.objectPosition = '';
+        } else if (estadoPJ1 === 'quieto-izq') {
+            imgPJ1.src = 'public/assets/player/pj1estaticoizq.png';
+            imgPJ1.style.objectFit = 'contain';
+            imgPJ1.style.width = '100%';
+            imgPJ1.style.height = '100%';
+            imgPJ1.style.objectPosition = '';
+        } else if (estadoPJ1 === 'caminar-der') {
+            cargarAnimacionPixly('public/assets/player/caminarpj1der.anim', frames => {
+                function mostrarFrame(i) {
+                    const f = frames[i];
+                    imgPJ1.src = 'public/assets/player/caminarpj1der.png';
+                    imgPJ1.style.objectFit = 'none';
+                    imgPJ1.style.width = '43px'; // <-- Fijar escala
+                    imgPJ1.style.height = '45px';
+                    imgPJ1.style.objectPosition = `-${f.x}px -${f.y}px`;
+                    animFramePJ1 = (i + 1) % frames.length;
+                    animTimeoutPJ1 = setTimeout(() => mostrarFrame(animFramePJ1), f.duration);
+                }
+                mostrarFrame(0);
+            });
+        } else if (estadoPJ1 === 'caminar-izq') {
+            cargarAnimacionPixly('public/assets/player/caminarpj1izq.anim', frames => {
+                function mostrarFrame(i) {
+                    const f = frames[i];
+                    imgPJ1.src = 'public/assets/player/caminarpj1izq.png';
+                    imgPJ1.style.objectFit = 'none';
+                    imgPJ1.style.width = '43px'; // <-- Fijar escala
+                    imgPJ1.style.height = '45px';
+                    imgPJ1.style.objectPosition = `-${f.x}px -${f.y}px`;
+                    animFramePJ1 = (i + 1) % frames.length;
+                    animTimeoutPJ1 = setTimeout(() => mostrarFrame(animFramePJ1), f.duration);
+                }
+                mostrarFrame(0);
+            });
+        }
+    }
+
+    // Inicializa sprite al empezar la pelea
+    actualizarSpritePJ1();
+
+    // --- Cambia el estado según movimiento ---
+    let ultimoPasoPJ1 = 'der'; // 'der' o 'izq'
+
+    // Modifica el manejo de teclas para pj1:
+    document.onkeydown = function(e) {
+        // DASH DETECTION J1
+        if (e.key.toLowerCase() === 'a') {
+            let now = Date.now();
+            if (now - lastLeftJ1 < dashWindow) dashJ1 = true;
+            lastLeftJ1 = now;
+            moviendoIzqJ1 = true;
+            estadoPJ1 = 'caminar-izq';
+            ultimoPasoPJ1 = 'izq';
+            actualizarSpritePJ1();
+        }
+        if (e.key.toLowerCase() === 'd') {
+            let now = Date.now();
+            if (now - lastRightJ1 < dashWindow) dashJ1 = true;
+            lastRightJ1 = now;
+            moviendoDerJ1 = true;
+            estadoPJ1 = 'caminar-der';
+            ultimoPasoPJ1 = 'der';
+            actualizarSpritePJ1();
+        }
+        // DASH DETECTION J2
+        if (e.key === 'ArrowLeft') {
+            let now = Date.now();
+            if (now - lastLeftJ2 < dashWindow) dashJ2 = true;
+            lastLeftJ2 = now;
+            moviendoIzqJ2 = true;
+        }
+        if (e.key === 'ArrowRight') {
+            let now = Date.now();
+            if (now - lastRightJ2 < dashWindow) dashJ2 = true;
+            lastRightJ2 = now;
+            moviendoDerJ2 = true;
+        }
+        // Salto J1 (W)
+        if (e.key.toLowerCase() === 'w' && !saltandoJ1 && yJ1 === sueloY) {
+            saltandoJ1 = true;
+            saltoPresionadoJ1 = true;
+        }
+        if (e.key.toLowerCase() === 'w' && saltandoJ1) {
+            saltoPresionadoJ1 = true;
+        }
+        // Golpe J1 (tecla "v")
+        if (e.key.toLowerCase() === 'v') {
+            if (Math.abs(posJ1 - posJ2) <= golpeDistancia) {
+                vidaJ2 = Math.max(0, vidaJ2 - 10);
+                actualizarHUD();
+            } else {
+                if (posJ1 < posJ2) posJ1 += golpeIman;
+                else posJ1 -= golpeIman;
+                actualizarPersonajes();
+            }
+        }
+
+        // Salto J2 (flecha arriba)
+        if (e.key === 'ArrowUp' && !saltandoJ2 && yJ2 === sueloY) {
+            saltandoJ2 = true;
+            saltoPresionadoJ2 = true;
+        }
+        if (e.key === 'ArrowUp' && saltandoJ2) {
+            saltoPresionadoJ2 = true;
+        }
+        // Golpe J2 (tecla "1")
+        if (e.key === '1') {
+            if (Math.abs(posJ1 - posJ2) <= golpeDistancia) {
+                vidaJ1 = Math.max(0, vidaJ1 - 10);
+                actualizarHUD();
+            } else {
+                if (posJ2 < posJ1) posJ2 += golpeIman;
+                else posJ2 -= golpeIman;
+                actualizarPersonajes();
+            }
+        }
+    };
+
+    document.onkeyup = function(e) {
+        // Movimiento J1
+        if (e.key.toLowerCase() === 'a') {
+            moviendoIzqJ1 = false;
+            dashJ1 = false;
+        }
+        if (e.key.toLowerCase() === 'd') {
+            moviendoDerJ1 = false;
+            dashJ1 = false;
+        }
+        // Salto J1 (W)
+        if (e.key.toLowerCase() === 'w') saltoPresionadoJ1 = false;
+
+        // Movimiento J2
+        if (e.key === 'ArrowLeft') {
+            moviendoIzqJ2 = false;
+            dashJ2 = false;
+        }
+        if (e.key === 'ArrowRight') {
+            moviendoDerJ2 = false;
+            dashJ2 = false;
+        }
+        // Salto J2 (flecha arriba)
+        if (e.key === 'ArrowUp') saltoPresionadoJ2 = false;
+    };
+
+    // Helper para cargar animación Pixly
+    function cargarAnimacionPixly(animPath, callback) {
+        fetch(animPath)
+            .then(res => res.text())
+            .then(xml => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(xml, "application/xml");
+                const frames = Array.from(doc.querySelectorAll("Frame")).map(frame => {
+                    const region = frame.querySelector("Region");
+                    return {
+                        x: parseInt(region.getAttribute("x")),
+                        y: parseInt(region.getAttribute("y")),
+                        width: parseInt(region.getAttribute("width")),
+                        height: parseInt(region.getAttribute("height")),
+                        duration: parseInt(frame.getAttribute("duration"))
+                    };
+                });
+                callback(frames);
+            });
+    }
+
+    // Cambia el sprite del personaje 1 según estado
+    function actualizarSpritePJ1() {
+        clearTimeout(animTimeoutPJ1);
+
+        if (estadoPJ1 === 'quieto-der') {
+            imgPJ1.src = 'public/assets/player/pj1estaticoder.png';
+            imgPJ1.style.objectFit = 'contain';
+            imgPJ1.style.width = '100%';
+            imgPJ1.style.height = '100%';
+            imgPJ1.style.objectPosition = '';
+        } else if (estadoPJ1 === 'quieto-izq') {
+            imgPJ1.src = 'public/assets/player/pj1estaticoizq.png';
+            imgPJ1.style.objectFit = 'contain';
+            imgPJ1.style.width = '100%';
+            imgPJ1.style.height = '100%';
+            imgPJ1.style.objectPosition = '';
+        } else if (estadoPJ1 === 'caminar-der') {
+            cargarAnimacionPixly('public/assets/player/caminarpj1der.anim', frames => {
+                function mostrarFrame(i) {
+                    const f = frames[i];
+                    imgPJ1.src = 'public/assets/player/caminarpj1der.png';
+                    imgPJ1.style.objectFit = 'none';
+                    imgPJ1.style.width = '86px'; // <-- Fijar escala
+                    imgPJ1.style.height = '90px';
+                    imgPJ1.style.objectPosition = `-${f.x}px -${f.y}px`;
+                    animFramePJ1 = (i + 1) % frames.length;
+                    animTimeoutPJ1 = setTimeout(() => mostrarFrame(animFramePJ1), f.duration);
+                }
+                mostrarFrame(0);
+            });
+        } else if (estadoPJ1 === 'caminar-izq') {
+            cargarAnimacionPixly('public/assets/player/caminarpj1izq.anim', frames => {
+                function mostrarFrame(i) {
+                    const f = frames[i];
+                    imgPJ1.src = 'public/assets/player/caminarpj1izq.png';
+                    imgPJ1.style.objectFit = 'none';
+                    imgPJ1.style.width = '86px'; // <-- Fijar escala
+                    imgPJ1.style.height = '90px';
+                    imgPJ1.style.objectPosition = `-${f.x}px -${f.y}px`;
+                    animFramePJ1 = (i + 1) % frames.length;
+                    animTimeoutPJ1 = setTimeout(() => mostrarFrame(animFramePJ1), f.duration);
+                }
+                mostrarFrame(0);
+            });
+        }
+    }
+
+    // Inicializa sprite al empezar la pelea
+    actualizarSpritePJ1();
+
+    // Modifica el manejo de teclas para pj1:
+    document.onkeydown = function(e) {
+        // DASH DETECTION J1
+        if (e.key.toLowerCase() === 'a') {
+            let now = Date.now();
+            if (now - lastLeftJ1 < dashWindow) dashJ1 = true;
+            lastLeftJ1 = now;
+            moviendoIzqJ1 = true;
+            estadoPJ1 = 'caminar-izq';
+            ultimoPasoPJ1 = 'izq';
+            actualizarSpritePJ1();
+        }
+        if (e.key.toLowerCase() === 'd') {
+            let now = Date.now();
+            if (now - lastRightJ1 < dashWindow) dashJ1 = true;
+            lastRightJ1 = now;
+            moviendoDerJ1 = true;
+            estadoPJ1 = 'caminar-der';
+            ultimoPasoPJ1 = 'der';
+            actualizarSpritePJ1();
+        }
+        // DASH DETECTION J2
+        if (e.key === 'ArrowLeft') {
+            let now = Date.now();
+            if (now - lastLeftJ2 < dashWindow) dashJ2 = true;
+            lastLeftJ2 = now;
+            moviendoIzqJ2 = true;
+        }
+        if (e.key === 'ArrowRight') {
+            let now = Date.now();
+            if (now - lastRightJ2 < dashWindow) dashJ2 = true;
+            lastRightJ2 = now;
+            moviendoDerJ2 = true;
+        }
+        // Salto J1 (W)
+        if (e.key.toLowerCase() === 'w' && !saltandoJ1 && yJ1 === sueloY) {
+            saltandoJ1 = true;
+            saltoPresionadoJ1 = true;
+        }
+        if (e.key.toLowerCase() === 'w' && saltandoJ1) {
+            saltoPresionadoJ1 = true;
+        }
+        // Golpe J1 (tecla "v")
+        if (e.key.toLowerCase() === 'v') {
+            if (Math.abs(posJ1 - posJ2) <= golpeDistancia) {
+                vidaJ2 = Math.max(0, vidaJ2 - 10);
+                actualizarHUD();
+            } else {
+                if (posJ1 < posJ2) posJ1 += golpeIman;
+                else posJ1 -= golpeIman;
+                actualizarPersonajes();
+            }
+        }
+
+        // Salto J2 (flecha arriba)
+        if (e.key === 'ArrowUp' && !saltandoJ2 && yJ2 === sueloY) {
+            saltandoJ2 = true;
+            saltoPresionadoJ2 = true;
+        }
+        if (e.key === 'ArrowUp' && saltandoJ2) {
+            saltoPresionadoJ2 = true;
+        }
+        // Golpe J2 (tecla "1")
+        if (e.key === '1') {
+            if (Math.abs(posJ1 - posJ2) <= golpeDistancia) {
+                vidaJ1 = Math.max(0, vidaJ1 - 10);
+                actualizarHUD();
+            } else {
+                if (posJ2 < posJ1) posJ2 += golpeIman;
+                else posJ2 -= golpeIman;
+                actualizarPersonajes();
+            }
+        }
+    };
+
+    document.onkeyup = function(e) {
+        // Movimiento J1
+        if (e.key.toLowerCase() === 'a') {
+            moviendoIzqJ1 = false;
+            estadoPJ1 = ultimoPasoPJ1 === 'izq' ? 'quieto-izq' : 'quieto-der';
+            actualizarSpritePJ1();
+        }
+        if (e.key.toLowerCase() === 'd') {
+            moviendoDerJ1 = false;
+            estadoPJ1 = ultimoPasoPJ1 === 'der' ? 'quieto-der' : 'quieto-izq';
+            actualizarSpritePJ1();
+        }
+        // Salto J1 (W)
+        if (e.key.toLowerCase() === 'w') saltoPresionadoJ1 = false;
+
+        // Movimiento J2
+        if (e.key === 'ArrowLeft') {
+            moviendoIzqJ2 = false;
+            dashJ2 = false;
+        }
+        if (e.key === 'ArrowRight') {
+            moviendoDerJ2 = false;
+            dashJ2 = false;
+        }
+        // Salto J2 (flecha arriba)
+        if (e.key === 'ArrowUp') saltoPresionadoJ2 = false;
+    };
 }
 
 function crearMenuModo() {
@@ -740,7 +1094,7 @@ function crearMenuMapas() {
     // Ejemplo de mapas
     const mapas = [
         { nombre: 'Playa', img: 'public/mapas/playaprov.jpg' },
-        { nombre: 'Bosque', img: 'public/mapas/bosque.jpg' },
+        { nombre: 'Bosque', img: 'public/mapas/mapa1.png' },
         { nombre: 'Volcán', img: 'public/mapas/volcan.jpg' }
     ];
     let seleccionado = 0;

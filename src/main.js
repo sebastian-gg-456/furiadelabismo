@@ -40,3 +40,4 @@ const config = {
 };
 
 new Game(config);
+import { crearMenuInicio } from './game.js';
