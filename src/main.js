@@ -1,43 +1,27 @@
-import { Game } from "phaser";
-import { Preloader } from "./preloader";
-import { GameOverScene } from "./scenes/GameOverScene";
-import { HudScene } from "./scenes/HudScene";
-import { MainScene } from "./scenes/MainScene";
-import { MenuScene } from "./scenes/MenuScene";
-import { SplashScene } from "./scenes/SplashScene";
+// main.js
 
-// More information about config: https://newdocs.phaser.io/docs/3.70.0/Phaser.Types.Core.GameConfig
-const config = {
+// Configuración principal de Phaser
+const gameConfig = {
     type: Phaser.AUTO,
-    parent: "phaser-container",
-    width: 960,
-    height: 540,
-    backgroundColor: "#1c172e",
-    pixelArt: true,
-    roundPixel: false,
-    max: {
-        width: 800,
-        height: 600,
-    },
-    scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
-    },
+    width: window.innerWidth,
+    height: window.innerHeight,
+    parent: 'phaser-example',
     physics: {
-        default: "arcade",
+        default: 'arcade',
         arcade: {
-            gravity: { y: 0 }
+            gravity: { y: 800 },
+            debug: false
         }
     },
-    scene: [
-        Preloader,
-        SplashScene,
-        MainScene,
-        MenuScene,
-        HudScene,
-        GameOverScene
-    ]
+    input: {
+        gamepad: true
+    },
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    scene: [Menu, ModeSelector, CharacterSelector, MapSelector, GameScene]
 };
 
-new Game(config);
-import { crearMenuInicio } from './game.js';
+// Inicializar el juego
+const game = new Phaser.Game(gameConfig);
