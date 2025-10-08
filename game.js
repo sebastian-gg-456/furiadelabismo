@@ -301,10 +301,23 @@ class CharacterSelector extends Phaser.Scene {
         });
     }
 
+    moveSelector(dir) {
+        if (!this.buttons || this.buttons.length === 0) return;
+        this.selectedIndex = Phaser.Math.Wrap(this.selectedIndex + dir, 0, this.buttons.length);
+        const b = this.buttons[this.selectedIndex];
+        if (b && b.rect) { this.selector.x = b.rect.x; this.selector.y = b.rect.y; }
+    }
+
     updateSelectors() {
-        // snap frames to chosen rects
-        this.playerSelectors[0].x = this.characterRects[this.playerSelections[0].index].x;
-        this.playerSelectors[1].x = this.characterRects[this.playerSelections[1].index].x;
+        // Asegura que los marcos de selección sigan a los personajes seleccionados
+        if (this.playerSelectors && this.characterRects) {
+            if (this.playerSelectors[0] && this.characterRects[this.playerSelections[0].index]) {
+                this.playerSelectors[0].x = this.characterRects[this.playerSelections[0].index].x;
+            }
+            if (this.playerSelectors[1] && this.characterRects[this.playerSelections[1].index]) {
+                this.playerSelectors[1].x = this.characterRects[this.playerSelections[1].index].x;
+            }
+        }
     }
 }
 
@@ -401,7 +414,7 @@ class GameScene extends Phaser.Scene {
         g.fillStyle(0x333333, 1); g.fillRect(0, 0, 200, 20); g.generateTexture('tex_ground', 200, 20); g.clear();
         g.fillStyle(0xffff00, 1); g.fillRect(0, 0, 12, 6); g.generateTexture('tex_bullet', 12, 6); g.clear();
 
-        this.add.text(20, 20, `Mapa: ${this.selectedMap}`, { font: "20px Arial", color: "#00ffff" });
+
 
         // Fullscreen on start
         this.scale.startFullscreen();
@@ -420,13 +433,14 @@ class GameScene extends Phaser.Scene {
             s.body.setSize(40, 88);
         });
 
+        // Cambios: vida 1000, energía 500
         this.players.push({
-            sprite: p1Sprite, health: 100, energy: 100, blocking: false,
+            sprite: p1Sprite, health: 1000, energy: 500, blocking: false,
             lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 0
         });
 
         this.players.push({
-            sprite: p2Sprite, health: 100, energy: 100, blocking: false,
+            sprite: p2Sprite, health: 1000, energy: 500, blocking: false,
             lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 1
         });
 
@@ -438,18 +452,27 @@ class GameScene extends Phaser.Scene {
         this.projectiles = this.physics.add.group();
 
         // Projectile -> players overlap
-        this.physics.add.overlap(this.projectiles, this.players[0].sprite, (proj, spr) => this.onProjectileHit(proj, 0));
-        this.physics.add.overlap(this.projectiles, this.players[1].sprite, (proj, spr) => this.onProjectileHit(proj, 1));
+        this.physics.add.overlap(
+            this.projectiles,
+            this.players[0].sprite,
+            (a, b) => this.handleProjectilePlayerOverlap(a, b, 0)
+        );
+        this.physics.add.overlap(
+            this.projectiles,
+            this.players[1].sprite,
+            (a, b) => this.handleProjectilePlayerOverlap(a, b, 1)
+        );
 
-        // Bars
+        // Barras más largas
         const barY = 30;
+        const barLength = 400;
         this.hpBars = [
-            this.add.rectangle(150, barY, this.players[0].health * 2, 18, 0xff0000).setOrigin(0, 0.5),
-            this.add.rectangle(this.scale.width - 150, barY, this.players[1].health * 2, 18, 0xff0000).setOrigin(1, 0.5)
+            this.add.rectangle(150, barY, barLength, 18, 0xff0000).setOrigin(0, 0.5),
+            this.add.rectangle(this.scale.width - 150, barY, barLength, 18, 0xff0000).setOrigin(1, 0.5)
         ];
         this.enBars = [
-            this.add.rectangle(150, barY + 28, this.players[0].energy * 2, 12, 0x00ccff).setOrigin(0, 0.5),
-            this.add.rectangle(this.scale.width - 150, barY + 28, this.players[1].energy * 2, 12, 0x00ccff).setOrigin(1, 0.5)
+            this.add.rectangle(150, barY + 28, barLength, 12, 0x00ccff).setOrigin(0, 0.5),
+            this.add.rectangle(this.scale.width - 150, barY + 28, barLength, 12, 0x00ccff).setOrigin(1, 0.5)
         ];
 
         // Keyboard controls
@@ -461,8 +484,6 @@ class GameScene extends Phaser.Scene {
             up: "UP", left: "LEFT", right: "RIGHT", down: "DOWN",
             hit: "K", block: "L", charge: "O", shoot: "P"
         });
-
-        // Also add confirm/back keys (used in menus) - not necessary here
 
         // Gamepad connect listener: initialize flags
         this.input.gamepad.on('connected', pad => {
@@ -476,30 +497,43 @@ class GameScene extends Phaser.Scene {
     }
 
     onProjectileHit(proj, hitPlayerIndex) {
-        // proj.shooter is index of shooter
-        if (!proj.active) return;
+        console.log("onProjectileHit", proj, hitPlayerIndex, proj.texture ? proj.texture.key : "no texture");
+        if (!proj.active || !proj.texture || proj.texture.key !== 'tex_bullet') return;
         const shooter = proj.shooter;
-        if (shooter === hitPlayerIndex) return; // ignore self
-        // if player blocking, no hp lost
+        if (shooter === hitPlayerIndex) return;
         if (!this.players[hitPlayerIndex].blocking) {
-            this.players[hitPlayerIndex].health = Math.max(0, this.players[hitPlayerIndex].health - 10);
+            this.players[hitPlayerIndex].health = Math.max(0, this.players[hitPlayerIndex].health - 20);
         }
         proj.destroy();
     }
 
+    handleProjectilePlayerOverlap(a, b, hitPlayerIndex) {
+        // Detecta cuál es la bala y cuál el jugador
+        let proj, playerSprite;
+        if (a.texture && a.texture.key === 'tex_bullet') {
+            proj = a;
+            playerSprite = b;
+        } else if (b.texture && b.texture.key === 'tex_bullet') {
+            proj = b;
+            playerSprite = a;
+        } else {
+            return; // Ninguno es proyectil, no hacer nada
+        }
+        this.onProjectileHit(proj, hitPlayerIndex);
+    }
+
     update(time) {
-        // Update inputs for each player (0 and 1)
         for (let i = 0; i < 2; i++) {
             this.updatePlayerInput(i, time);
         }
 
-        // Update bars
-        this.hpBars[0].width = Math.max(0, this.players[0].health * 2);
-        this.hpBars[1].width = Math.max(0, this.players[1].health * 2);
-        this.enBars[0].width = Math.max(0, this.players[0].energy * 2);
-        this.enBars[1].width = Math.max(0, this.players[1].energy * 2);
+        // Barras ajustadas a vida/energía máxima
+        const maxHP = 1000, maxEN = 500, barLength = 400;
+        this.hpBars[0].width = Math.max(0, (this.players[0].health / maxHP) * barLength);
+        this.hpBars[1].width = Math.max(0, (this.players[1].health / maxHP) * barLength);
+        this.enBars[0].width = Math.max(0, (this.players[0].energy / maxEN) * barLength);
+        this.enBars[1].width = Math.max(0, (this.players[1].energy / maxEN) * barLength);
 
-        // destroy projectiles out of screen bounds
         this.projectiles.children.iterate(proj => {
             if (!proj) return;
             if (proj.x < -50 || proj.x > this.scale.width + 50) proj.destroy();
@@ -509,9 +543,10 @@ class GameScene extends Phaser.Scene {
     updatePlayerInput(i, time) {
         const player = this.players[i];
         const sprite = player.sprite;
-        const pad = getPad(player.padIndex, this);
+        if (!sprite || !sprite.body) return;
 
-        // read gamepad axes/buttons
+        const pad = getPad(player.padIndex, this); // <-- agrega esta línea
+
         let left = false, right = false, up = false, punch = false, block = false, charge = false, shoot = false;
 
         if (pad && pad.connected) {
@@ -519,20 +554,12 @@ class GameScene extends Phaser.Scene {
             left = axisX < -0.3;
             right = axisX > 0.3;
             up = pad.buttons[0] && pad.buttons[0].pressed;
-            // discrete button presses: use edge detection
             if (!pad._lastButtons) pad._lastButtons = [];
             const btn = pad.buttons;
-
-            // Punch = X (button 2)
             if (btn[2] && btn[2].pressed && !pad._lastButtons[2]) punch = true;
-            // Shoot = RT (button 7) - treat as edge too
             if (btn[7] && btn[7].pressed && !pad._lastButtons[7]) shoot = true;
-            // Block = RB (5) (hold)
             block = btn[5] && btn[5].pressed;
-            // Charge = LB (4) (hold)
             charge = btn[4] && btn[4].pressed;
-
-            // update lastButtons snapshot
             pad._lastButtons = btn.map(b => !!b.pressed);
         }
 
@@ -570,22 +597,21 @@ class GameScene extends Phaser.Scene {
 
         // Charge energy (hold)
         if (charge) {
-            player.energy = Math.min(100, player.energy + 0.6);
+            player.energy = Math.min(500, player.energy + 0.6);
         } else {
-            // tiny passive regen
-            player.energy = Math.min(100, player.energy + 0.05);
+            player.energy = Math.min(500, player.energy + 0.05);
         }
 
-        // Punch (discrete)
+        // Puñetazo: 50 de daño
         if (punch && (time - player.lastPunch) > player.punchCD) {
             player.lastPunch = time;
             this.doPunch(i);
         }
 
-        // Shoot (discrete & energy cost)
-        if (shoot && (time - player.lastShot) > player.shotCD && player.energy >= 10) {
+        // Disparo: 20 de daño, 100 energía
+        if (shoot && (time - player.lastShot) > player.shotCD && player.energy >= 100) {
             player.lastShot = time;
-            player.energy = Math.max(0, player.energy - 10);
+            player.energy = Math.max(0, player.energy - 100);
             this.spawnProjectile(i);
         }
     }
@@ -595,46 +621,32 @@ class GameScene extends Phaser.Scene {
         const target = this.players[1 - i];
         const dist = Phaser.Math.Distance.Between(attacker.sprite.x, attacker.sprite.y, target.sprite.x, target.sprite.y);
         if (dist < 90) {
-            // if target blocking -> no dmg
             if (!target.blocking) {
-                target.health = Math.max(0, target.health - 10);
+                target.health = Math.max(0, target.health - 50); // Puñetazo: 50
             }
-            // imán: empuja al atacante hacia el target un poco
             const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
             attacker.sprite.setVelocityX(120 * dir);
         }
     }
 
-spawnProjectile(i) {
-    const shooter = this.players[i];
-    if (!shooter || !shooter.sprite) return; // <-- prevención de errores
+    spawnProjectile(i) {
+        const shooter = this.players[i];
+        if (!shooter || !shooter.sprite) return;
 
-    const sx = shooter.sprite.x + (shooter.sprite.flipX ? -30 : 30);
-    const sy = shooter.sprite.y - 10;
+        const sx = shooter.sprite.x + (shooter.sprite.flipX ? -30 : 30);
+        const sy = shooter.sprite.y - 10;
 
-    const proj = this.physics.add.sprite(sx, sy, 'tex_bullet');
-    proj.setGravity(0, 0);          // desactivar gravedad
-    proj.body.setAllowGravity(false); 
-    proj.shooter = i;
-    const velocity = shooter.sprite.flipX ? -450 : 450;
-if (proj && proj.body) proj.body.setVelocityX(velocity);
+        const proj = this.physics.add.sprite(sx, sy, 'tex_bullet');
+        proj.shooter = i;
 
-    this.projectiles.add(proj);
+        this.projectiles.add(proj);
+        proj.body.setAllowGravity(false);
 
-    // destrucción después de cierto tiempo
-    this.time.delayedCall(2200, () => {
-        if (proj && proj.active) proj.destroy();
-    });
-    // opcional: lifespan
-this.time.delayedCall(2200, () => { if (proj && proj.active) proj.destroy(); });
+        const velocity = shooter.sprite.flipX ? -450 : 450;
+        if (proj && proj.body) proj.body.setVelocityX(velocity);
 
+        this.time.delayedCall(2200, () => {
+            if (proj && proj.active) proj.destroy();
+        });
     }
 }
-
-
-
-// ========================
-// --- EXPORT / INICIALIZACIÓN ---
-// ========================
-// No config aquí — main.js debe contener la configuración y llamar a Phaser.Game
-// Sólo export the classes by global name (they're already globally defined via class declarations)
