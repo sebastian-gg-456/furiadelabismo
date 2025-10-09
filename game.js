@@ -289,9 +289,16 @@ class CharacterSelector extends Phaser.Scene {
             else if (x > 0.55 && !pad._rightPressed) { sel.index = Phaser.Math.Wrap(sel.index + 1, 0, this.characterRects.length); pad._rightPressed = true; this.updateSelectors(); }
             else if (x > -0.55 && x < 0.55) pad._leftPressed = pad._rightPressed = false;
 
-            // A confirm -> start
+            // A confirm
             const a = pad.buttons[0] && pad.buttons[0].pressed;
-            if (a && !pad._aPressed) { this.scene.start("MapSelector", { player1: this.playerSelections[0].index, player2: this.playerSelections[1].index, mode: this.selectedMode }); pad._aPressed = true; }
+            if (a && !pad._aPressed) {
+                this.scene.start("MapSelector", {
+                    player1: this.playerSelections[0].index,
+                    player2: this.playerSelections[1].index,
+                    mode: this.selectedMode
+                });
+                pad._aPressed = true;
+            }
             if (!a) pad._aPressed = false;
 
             // B back
@@ -308,6 +315,7 @@ class CharacterSelector extends Phaser.Scene {
         if (b && b.rect) { this.selector.x = b.rect.x; this.selector.y = b.rect.y; }
     }
 
+    // Agrega este método dentro de la clase CharacterSelector
     updateSelectors() {
         // Asegura que los marcos de selección sigan a los personajes seleccionados
         if (this.playerSelectors && this.characterRects) {
@@ -433,15 +441,37 @@ class GameScene extends Phaser.Scene {
             s.body.setSize(40, 88);
         });
 
-        // Cambios: vida 1000, energía 500
+        // Cambios: vida 1000, energía 500, contador de golpes y flag de daño
         this.players.push({
             sprite: p1Sprite, health: 1000, energy: 500, blocking: false,
-            lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 0
+            lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 0,
+            hitCount: 0, beingHit: false, hitTimer: 0,
+            specialBuffer: [], // Para secuencia de botones
+            specialActive: false,
+            specialTimer: 0,
+            transformed: false,
+            transformTimer: 0,
+            transformBuffer: [],
+            transformActive: false,
+            explosionBuffer: [],
+            explosionPending: false,
+            explosionTimer: 0
         });
 
         this.players.push({
             sprite: p2Sprite, health: 1000, energy: 500, blocking: false,
-            lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 1
+            lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 1,
+            hitCount: 0, beingHit: false, hitTimer: 0,
+            specialBuffer: [], // Para secuencia de botones
+            specialActive: false,
+            specialTimer: 0,
+            transformed: false,
+            transformTimer: 0,
+            transformBuffer: [],
+            transformActive: false,
+            explosionBuffer: [],
+            explosionPending: false,
+            explosionTimer: 0
         });
 
         // Colliders
@@ -501,8 +531,12 @@ class GameScene extends Phaser.Scene {
         if (!proj.active || !proj.texture || proj.texture.key !== 'tex_bullet') return;
         const shooter = proj.shooter;
         if (shooter === hitPlayerIndex) return;
-        if (!this.players[hitPlayerIndex].blocking) {
-            this.players[hitPlayerIndex].health = Math.max(0, this.players[hitPlayerIndex].health - 20);
+        const target = this.players[hitPlayerIndex];
+        if (!target.blocking) {
+            target.health = Math.max(0, target.health - 20);
+            // Stun por disparo
+            target.beingHit = true;
+            target.hitTimer = this.time.now + 300; // 300ms de stun por disparo
         }
         proj.destroy();
     }
@@ -524,6 +558,19 @@ class GameScene extends Phaser.Scene {
 
     update(time) {
         for (let i = 0; i < 2; i++) {
+            // Si está siendo golpeado, verifica si ya terminó el stun
+            if (this.players[i].beingHit && time > this.players[i].hitTimer) {
+                this.players[i].beingHit = false;
+            }
+            // Daño constante por bloqueo si corresponde
+            const p = this.players[i];
+            if (p.blockingDamageEnd && time < p.blockingDamageEnd) {
+                const dt = this.game.loop.delta / 1000;
+                p.health = Math.max(0, p.health - (p.blockingDamagePerSecond || 0) * dt);
+            } else {
+                p.blockingDamageEnd = null;
+                p.blockingDamagePerSecond = 0;
+            }
             this.updatePlayerInput(i, time);
         }
 
@@ -545,9 +592,16 @@ class GameScene extends Phaser.Scene {
         const sprite = player.sprite;
         if (!sprite || !sprite.body) return;
 
-        const pad = getPad(player.padIndex, this); // <-- agrega esta línea
+        // Si está siendo golpeado, no puede moverse, saltar, pegar ni disparar
+        if (player.beingHit) {
+            sprite.setVelocityX(0);
+            sprite.setTint(0xff4444); // Color de daño
+            return;
+        }
 
-        let left = false, right = false, up = false, punch = false, block = false, charge = false, shoot = false;
+        const pad = getPad(player.padIndex, this);
+
+        let left = false, right = false, up = false, punch = false, blockOrCharge = false, shoot = false;
 
         if (pad && pad.connected) {
             const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
@@ -558,49 +612,63 @@ class GameScene extends Phaser.Scene {
             const btn = pad.buttons;
             if (btn[2] && btn[2].pressed && !pad._lastButtons[2]) punch = true;
             if (btn[7] && btn[7].pressed && !pad._lastButtons[7]) shoot = true;
-            block = btn[5] && btn[5].pressed;
-            charge = btn[4] && btn[4].pressed;
+            blockOrCharge = btn[5] && btn[5].pressed; // Usar solo RB para bloquear/cargar
             pad._lastButtons = btn.map(b => !!b.pressed);
         }
 
-        // Keyboard fallback / simultaneous keyboard support
+        // Keyboard fallback
         if (i === 0) {
             left = left || this.keysP1.left.isDown;
             right = right || this.keysP1.right.isDown;
             if (Phaser.Input.Keyboard.JustDown(this.keysP1.up)) up = true;
             if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) punch = true;
-            block = block || this.keysP1.block.isDown;
-            charge = charge || this.keysP1.charge.isDown;
+            blockOrCharge = blockOrCharge || this.keysP1.block.isDown; // Usar solo C para bloquear/cargar
             if (Phaser.Input.Keyboard.JustDown(this.keysP1.shoot)) shoot = true;
         } else {
             left = left || this.keysP2.left.isDown;
             right = right || this.keysP2.right.isDown;
             if (Phaser.Input.Keyboard.JustDown(this.keysP2.up)) up = true;
             if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) punch = true;
-            block = block || this.keysP2.block.isDown;
-            charge = charge || this.keysP2.charge.isDown;
+            blockOrCharge = blockOrCharge || this.keysP2.block.isDown; // Usar solo L para bloquear/cargar
             if (Phaser.Input.Keyboard.JustDown(this.keysP2.shoot)) shoot = true;
         }
 
-        // Movement
+        // --- NUEVO: Si está bloqueando o cargando, no puede hacer nada más ---
+        // Determinar si está cerca del enemigo (para bloquear) o lejos (para cargar)
+        const other = this.players[1 - i];
+        const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, other.sprite.x, other.sprite.y);
+        const chargeDistance = 140; // Si está a más de 140px, puede cargar
+
+        if (blockOrCharge) {
+            if (dist > chargeDistance) {
+                // Cargar energía (lejos)
+                player.blocking = false;
+                sprite.setTint(0x2222cc); // Color para cargar
+                player.energy = Math.min(500, player.energy + 2.0); // Carga más rápida
+            } else {
+                // Bloquear (cerca)
+                player.blocking = true;
+                sprite.setTint(0x336633); // Color para bloquear
+            }
+            // No puede moverse, saltar, disparar ni pegar
+            sprite.setVelocityX(0);
+            return;
+        } else {
+            player.blocking = false;
+            sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
+        }
+
+        // Movimiento solo si NO está bloqueando/cargando
         const speed = 220;
         if (left) { sprite.setVelocityX(-speed); sprite.flipX = true; }
         else if (right) { sprite.setVelocityX(speed); sprite.flipX = false; }
         else { sprite.setVelocityX(0); }
 
-        // Jump (use onFloor for reliability)
+        // Saltar
         if (up && sprite.body.onFloor()) sprite.setVelocityY(-560);
 
-        // Blocking
-        player.blocking = !!block;
-        sprite.setTint(player.blocking ? 0x336633 : (i === 0 ? 0x00ffff : 0xff0066)); // visual feedback
-
-        // Charge energy (hold)
-        if (charge) {
-            player.energy = Math.min(500, player.energy + 0.6);
-        } else {
-            player.energy = Math.min(500, player.energy + 0.05);
-        }
+        // Pequeña recarga pasiva
+        player.energy = Math.min(500, player.energy + 0.05);
 
         // Puñetazo: 50 de daño
         if (punch && (time - player.lastPunch) > player.punchCD) {
@@ -614,19 +682,10 @@ class GameScene extends Phaser.Scene {
             player.energy = Math.max(0, player.energy - 100);
             this.spawnProjectile(i);
         }
-    }
 
-    doPunch(i) {
-        const attacker = this.players[i];
-        const target = this.players[1 - i];
-        const dist = Phaser.Math.Distance.Between(attacker.sprite.x, attacker.sprite.y, target.sprite.x, target.sprite.y);
-        if (dist < 90) {
-            if (!target.blocking) {
-                target.health = Math.max(0, target.health - 50); // Puñetazo: 50
-            }
-            const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
-            attacker.sprite.setVelocityX(120 * dir);
-        }
+        this.handleCharlesSpecial(i, time);
+        this.handleCharlesTransform(i, time);
+        this.handleCharlesExplosion(i, time);
     }
 
     spawnProjectile(i) {
@@ -648,5 +707,293 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(2200, () => {
             if (proj && proj.active) proj.destroy();
         });
+    }
+
+    doPunch(i) {
+        const attacker = this.players[i];
+        const target = this.players[1 - i];
+        const dist = Phaser.Math.Distance.Between(attacker.sprite.x, attacker.sprite.y, target.sprite.x, target.sprite.y);
+
+        // Solo cuenta como golpe si el objetivo NO está siendo golpeado
+        if (dist < 90 && !target.beingHit) {
+            // Si Charles está transformado
+            const isCharlesTrans = attacker.transformed && ((i === 0 && this.player1Index === 0) || (i === 1 && this.player2Index === 0));
+            if (!target.blocking) {
+                attacker.hitCount = (attacker.hitCount || 0) + 1;
+                // Daño aumentado si está transformado
+                const damage = isCharlesTrans ? 80 : 50;
+                target.health = Math.max(0, target.health - damage);
+
+                // Cada 3er golpe: golpe fuerte (solo si NO está bloqueando)
+                if (attacker.hitCount % 3 === 0) {
+                    const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
+                    const horizontal = 1800 * dir;
+                    const vertical = -250;
+                    target.sprite.setVelocity(horizontal, vertical);
+                }
+            } else {
+                // Si Charles está transformado y el objetivo bloquea, recibe daño constante por 1.5s
+                if (isCharlesTrans) {
+                    // Aplica daño constante por 1.5 segundos (25 por segundo)
+                    const now = this.time.now;
+                    if (!target.blockingDamageEnd || now > target.blockingDamageEnd) {
+                        target.blockingDamageEnd = now + 1500;
+                    }
+                    target.blockingDamagePerSecond = 25;
+                } else {
+                    attacker.hitCount = 0;
+                }
+            }
+
+            // Marcar como siendo golpeado (stun)
+            target.beingHit = true;
+            target.hitTimer = this.time.now + 400;
+            const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
+            attacker.sprite.setVelocityX(120 * dir);
+        }
+    }
+
+    handleCharlesSpecial(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Solo Charles (índice 0 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 0) || (i === 1 && this.player2Index !== 0)) return;
+
+        // Si ya está activa la habilidad, aplicar daño continuo
+        if (player.specialActive) {
+            if (time < player.specialTimer) {
+                // Daño continuo: 30 por segundo (cada frame)
+                const target = this.players[1 - i];
+                if (!target.blocking) {
+                    const dt = this.game.loop.delta / 1000;
+                    target.health = Math.max(0, target.health - 30 * dt);
+                }
+            } else {
+                player.specialActive = false;
+            }
+            return;
+        }
+
+        // Detectar secuencia: IZQ, DER, GOLPE (en menos de 1s entre cada uno)
+        // Solo si tiene suficiente energía (150)
+        if (player.energy < 150) {
+            player.specialBuffer = [];
+            return;
+        }
+
+        // Detectar teclas o gamepad
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX < -0.7 && !pad._specialLeft) { input = "L"; pad._specialLeft = true; }
+            if (axisX > 0.7 && !pad._specialRight) { input = "R"; pad._specialRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) { pad._specialLeft = pad._specialRight = false; }
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._specialHit) { input = "X"; pad._specialHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._specialHit = false;
+        }
+
+        // Buffer de secuencia
+        if (input) {
+            const now = time;
+            if (player.specialBuffer.length === 0 || (now - (player.specialBuffer[player.specialBuffer.length - 1].t)) < 1000) {
+                player.specialBuffer.push({ k: input, t: now });
+                if (player.specialBuffer.length > 3) player.specialBuffer.shift();
+            } else {
+                player.specialBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verificar secuencia
+        if (
+            player.specialBuffer.length === 3 &&
+            player.specialBuffer[0].k === "L" &&
+            player.specialBuffer[1].k === "R" &&
+            player.specialBuffer[2].k === "X"
+        ) {
+            const target = this.players[1 - i];
+            const normalPunchDist = 90;
+            const specialDist = 180; // Un poco más de alcance que el golpe normal
+            const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, target.sprite.x, target.sprite.y);
+
+            if (dist <= specialDist && !target.blocking) {
+                // Gasta energía y activa la habilidad
+                player.energy = Math.max(0, player.energy - 150);
+                player.specialActive = true;
+                player.specialTimer = time + 3000; // 3 segundos de daño continuo
+
+                // Daño instantáneo y retroceso fuerte (pero no exagerado)
+                target.health = Math.max(0, target.health - 65);
+                const dir = (target.sprite.x > sprite.x) ? 1 : -1;
+                target.sprite.setVelocity(600 * dir, -120); // Empuje fuerte pero no extremo
+            } else if (dist > specialDist) {
+                // Si está lejos, Charles se lanza hacia el rival (dash fuerte)
+                const dir = (target.sprite.x > sprite.x) ? 1 : -1;
+                sprite.setVelocityX(900 * dir); // Dash rápido
+                // No activa la habilidad hasta estar cerca y repetir la secuencia
+            }
+            // Limpiar buffer siempre
+            player.specialBuffer = [];
+        }
+    }
+
+    handleCharlesTransform(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Solo Charles (índice 0 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 0) || (i === 1 && this.player2Index !== 0)) return;
+
+        // Si ya está transformado, controlar duración y efectos
+        if (player.transformed) {
+            sprite.setTint(0xffcc00); // Color de transformación
+            player.blocking = false; // No puede bloquear
+            if (time > player.transformTimer) {
+                player.transformed = false;
+                sprite.setTint(i === 0 ? 0x00ffff : 0xff0066); // Color normal
+            }
+            return;
+        }
+
+        // Detectar secuencia: DERECHA, IZQ, GOLPE (en menos de 1s entre cada uno)
+        if (player.energy < 300) {
+            player.transformBuffer = [];
+            return;
+        }
+
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._transRight) { input = "R"; pad._transRight = true; }
+            if (axisX < -0.7 && !pad._transLeft) { input = "L"; pad._transLeft = true; }
+            if (axisX > -0.7 && axisX < 0.7) { pad._transRight = false; pad._transLeft = false; }
+            // Botón de golpe (X, index 2)
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._transHit) { input = "X"; pad._transHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._transHit = false;
+        }
+
+        // Buffer de secuencia
+        if (input) {
+            const now = time;
+            if (player.transformBuffer.length === 0 || (now - (player.transformBuffer[player.transformBuffer.length - 1].t)) < 1000) {
+                player.transformBuffer.push({ k: input, t: now });
+                if (player.transformBuffer.length > 3) player.transformBuffer.shift();
+            } else {
+                player.transformBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verificar secuencia
+        if (
+            player.transformBuffer.length === 3 &&
+            player.transformBuffer[0].k === "R" &&
+            player.transformBuffer[1].k === "L" &&
+            player.transformBuffer[2].k === "X"
+        ) {
+            // Activar transformación
+            player.energy = Math.max(0, player.energy - 300);
+            player.transformed = true;
+            player.transformTimer = time + 8000; // Dura 8 segundos (ajusta si quieres)
+            player.transformBuffer = [];
+        }
+    }
+
+    handleCharlesExplosion(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Solo Charles (índice 0 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 0) || (i === 1 && this.player2Index !== 0)) return;
+
+        // Si la explosión está pendiente, verifica si debe explotar
+        if (player.explosionPending && time > player.explosionTimer) {
+            player.explosionPending = false;
+            const target = this.players[1 - i];
+            // Efecto visual: puedes agregar aquí una animación o sprite de explosión
+            this.cameras.main.flash(200, 255, 180, 0);
+
+            // Si el enemigo está bloqueando, no recibe daño, pero puedes poner un pequeño retroceso si quieres
+            if (!target.blocking) {
+                target.health = Math.max(0, target.health - 90); // Daño de la explosión
+                target.sprite.setVelocityY(-400); // Lo lanza hacia arriba
+            } else {
+                // Si bloquea, recibe menos daño o nada (ajusta si quieres)
+                target.health = Math.max(0, target.health - 30);
+                target.sprite.setVelocityY(-120);
+            }
+            return;
+        }
+
+        // Detectar secuencia: DERECHA, DERECHA, GOLPE (en menos de 1s entre cada uno)
+        if (player.energy < 180) {
+            player.explosionBuffer = [];
+            return;
+        }
+
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._explRight) { input = "R"; pad._explRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) pad._explRight = false;
+            // Botón de golpe (X, index 2)
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._explHit) { input = "X"; pad._explHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._explHit = false;
+        }
+
+        // Buffer de secuencia
+        if (input) {
+            const now = time;
+            if (player.explosionBuffer.length === 0 || (now - (player.explosionBuffer[player.explosionBuffer.length - 1].t)) < 1000) {
+                player.explosionBuffer.push({ k: input, t: now });
+                if (player.explosionBuffer.length > 3) player.explosionBuffer.shift();
+            } else {
+                player.explosionBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verificar secuencia
+        if (
+            player.explosionBuffer.length === 3 &&
+            player.explosionBuffer[0].k === "R" &&
+            player.explosionBuffer[1].k === "R" &&
+            player.explosionBuffer[2].k === "X"
+        ) {
+            // Gasta energía y programa la explosión
+            player.energy = Math.max(0, player.energy - 180);
+            player.explosionPending = true;
+            player.explosionTimer = time + 1500; // 1.5 segundos después
+            player.explosionBuffer = [];
+        }
     }
 }
