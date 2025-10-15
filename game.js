@@ -48,7 +48,7 @@ class Menu extends Phaser.Scene {
         startY += buttonHeight + spacing;
         const controlsButton = this.add.rectangle(width / 2, startY, buttonWidth, buttonHeight, 0x002244).setInteractive();
         this.controlsText = this.add.text(width / 2, startY, isEnglish ? "CONTROLS" : "CONTROLES", { font: "28px Arial", color: "#66ffff" }).setOrigin(0.5);
-        this.buttons.push({ rect: controlsButton, callback: () => console.log(isEnglish ? "Show controls" : "Mostrar controles") });
+        this.buttons.push({ rect: controlsButton, callback: () => this.scene.start("ControlsScene") });
 
         // Marco selector
         this.selector = this.add.rectangle(this.buttons[this.selectedIndex].rect.x, this.buttons[this.selectedIndex].rect.y, buttonWidth + 10, buttonHeight + 10).setStrokeStyle(4, 0xffff00).setOrigin(0.5);
@@ -97,7 +97,10 @@ class Menu extends Phaser.Scene {
 
             // A to confirm
             const aPressed = pad.buttons[0] && pad.buttons[0].pressed;
-            if (aPressed && !pad._aPressed) { this.buttons[this.selectedIndex].callback(); pad._aPressed = true; }
+            if (aPressed && !pad._aPressed) {
+                this.buttons[this.selectedIndex].callback();
+                pad._aPressed = true;
+            }
             if (!aPressed) pad._aPressed = false;
 
             // B/back does nothing in main menu
@@ -111,7 +114,48 @@ class Menu extends Phaser.Scene {
         if (button && button.rect) { this.selector.x = button.rect.x; this.selector.y = button.rect.y; }
     }
 }
+// --- ESCENA CONTROLES ---
+  class ControlsScene extends Phaser.Scene {
+    constructor() { super("ControlsScene"); }
+    create() {
+        const { width, height } = this.scale;
+        this.cameras.main.setBackgroundColor(0x001d33);
 
+        const title = this.add.text(width / 2, 60, isEnglish ? "CONTROLS" : "CONTROLES", { font: "48px Arial", color: "#00ffff" }).setOrigin(0.5);
+
+        let y = 130;
+        const line = (txt) => {
+this.add.text(80, y, txt, { font: "26px Arial", color: "#ffffff" }).setOrigin(0, 0.5);            y += 38;
+        };
+
+        // Controles básicos
+        line(isEnglish ? "Basic Controls" : "Controles básicos");
+        line(isEnglish ? "Move: A/D or LEFT/RIGHT" : "Moverse: A/D o IZQ/DERECHA");
+        line(isEnglish ? "Jump: W or UP" : "Saltar: W o ARRIBA");
+        line(isEnglish ? "Punch: X or K" : "Golpe: X o K");
+        line(isEnglish ? "Block/Charge: C or L" : "Bloquear/Cargar: C o L");
+        line(isEnglish ? "Shoot: B or P" : "Disparar: B o P");
+        y += 18;
+
+        // Habilidades
+        line(isEnglish ? "Special Abilities (all characters):" : "Habilidades especiales (todos los personajes):");
+        line(isEnglish ? "Ability 1: LEFT, RIGHT, PUNCH" : "Habilidad 1: IZQ, DER, GOLPE");
+        line(isEnglish ? "Ability 2: RIGHT, LEFT, PUNCH" : "Habilidad 2: DER, IZQ, GOLPE");
+        line(isEnglish ? "Ability 3: RIGHT, RIGHT, PUNCH" : "Habilidad 3: DER, DER, GOLPE");
+        y += 18;
+
+        // Botón para volver
+        const backBtn = this.add.rectangle(width / 2, height - 70, 220, 60, 0x003355).setInteractive();
+        const backTxt = this.add.text(width / 2, height - 70, isEnglish ? "BACK" : "VOLVER", { font: "28px Arial", color: "#00ffff" }).setOrigin(0.5);
+        backBtn.on('pointerdown', () => this.scene.start("Menu"));
+
+        // Tecla ESC para volver
+        this.input.keyboard.on('keydown-ESC', () => this.scene.start("Menu"));
+        // Enter o Space también vuelven
+        this.input.keyboard.on('keydown-ENTER', () => this.scene.start("Menu"));
+        this.input.keyboard.on('keydown-SPACE', () => this.scene.start("Menu"));
+    }
+}
 // --- ESCENA MODE SELECTOR ---
 class ModeSelector extends Phaser.Scene {
     constructor() { super("ModeSelector"); }
@@ -172,7 +216,10 @@ class ModeSelector extends Phaser.Scene {
 
             // A confirm
             const a = pad.buttons[0] && pad.buttons[0].pressed;
-            if (a && !pad._aPressed) { this.buttons[this.selectedIndex].callback(); pad._aPressed = true; }
+            if (a && !pad._aPressed) {
+                this.buttons[this.selectedIndex].callback();
+                pad._aPressed = true;
+            }
             if (!a) pad._aPressed = false;
 
             // B back
@@ -271,7 +318,11 @@ class CharacterSelector extends Phaser.Scene {
 
         // Confirm with keyboard: either player confirms -> start GameScene with both selections
         if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) || Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)) {
-            this.scene.start("MapSelector", { player1: this.playerSelections[0].index, player2: this.playerSelections[1].index, mode: this.selectedMode });
+            this.scene.start("MapSelector", {
+                player1: this.playerSelections[0].index,
+                player2: this.playerSelections[1].index,
+                mode: this.selectedMode
+            });
         }
 
         // Back
@@ -285,25 +336,29 @@ class CharacterSelector extends Phaser.Scene {
             const x = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
             const sel = this.playerSelections[i] || this.playerSelections[0];
 
-            if (x < -0.55 && !pad._leftPressed) { sel.index = Phaser.Math.Wrap(sel.index - 1, 0, this.characterRects.length); pad._leftPressed = true; this.updateSelectors(); }
-            else if (x > 0.55 && !pad._rightPressed) { sel.index = Phaser.Math.Wrap(sel.index + 1, 0, this.characterRects.length); pad._rightPressed = true; this.updateSelectors(); }
+            if (x < -0.55 && !pad._leftPressed) { 
+                sel.index = Phaser.Math.Wrap(sel.index - 1, 0, this.characterRects.length); 
+                pad._leftPressed = true; 
+                this.updateSelectors(); 
+            }
+            else if (x > 0.55 && !pad._rightPressed) { 
+                sel.index = Phaser.Math.Wrap(sel.index + 1, 0, this.characterRects.length); 
+                pad._rightPressed = true; 
+                this.updateSelectors(); 
+            }
             else if (x > -0.55 && x < 0.55) pad._leftPressed = pad._rightPressed = false;
 
             // A confirm
             const a = pad.buttons[0] && pad.buttons[0].pressed;
             if (a && !pad._aPressed) {
-                this.scene.start("MapSelector", {
-                    player1: this.playerSelections[0].index,
-                    player2: this.playerSelections[1].index,
-                    mode: this.selectedMode
-                });
+                this.buttons[this.selectedIndex].callback();
                 pad._aPressed = true;
             }
             if (!a) pad._aPressed = false;
 
             // B back
             const b = pad.buttons[1] && pad.buttons[1].pressed;
-            if (b && !pad._bPressed) { this.scene.start("ModeSelector"); pad._bPressed = true; }
+            if (b && !pad._bPressed) { this.scene.start("Menu"); pad._bPressed = true; }
             if (!b) pad._bPressed = false;
         });
     }
@@ -315,7 +370,6 @@ class CharacterSelector extends Phaser.Scene {
         if (b && b.rect) { this.selector.x = b.rect.x; this.selector.y = b.rect.y; }
     }
 
-    // Agrega este método dentro de la clase CharacterSelector
     updateSelectors() {
         // Asegura que los marcos de selección sigan a los personajes seleccionados
         if (this.playerSelectors && this.characterRects) {
@@ -380,14 +434,17 @@ class MapSelector extends Phaser.Scene {
             const x = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
             if (x < -0.6 && !pad._leftPressed) { this.changeMap(-1); pad._leftPressed = true; }
             else if (x > 0.6 && !pad._rightPressed) { this.changeMap(1); pad._rightPressed = true; }
-            else if (x > -0.6 && x < 0.6) pad._leftPressed = pad._rightPressed = false;
+            else if (x > -0.6 && x < 0.6) { pad._leftPressed = pad._rightPressed = false; }
 
             const a = pad.buttons[0] && pad.buttons[0].pressed;
-            if (a && !pad._aPressed) { this.startGame(); pad._aPressed = true; }
+            if (a && !pad._aPressed) {
+                this.buttons[this.selectedIndex].callback();
+                pad._aPressed = true;
+            }
             if (!a) pad._aPressed = false;
 
             const b = pad.buttons[1] && pad.buttons[1].pressed;
-            if (b && !pad._bPressed) { this.scene.start("CharacterSelector", { mode: this.selectedMode }); pad._bPressed = true; }
+            if (b && !pad._bPressed) { this.scene.start("Menu"); pad._bPressed = true; }
             if (!b) pad._bPressed = false;
         });
     }
@@ -446,7 +503,7 @@ class GameScene extends Phaser.Scene {
             sprite: p1Sprite, health: 1000, energy: 500, blocking: false,
             lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 0,
             hitCount: 0, beingHit: false, hitTimer: 0,
-            specialBuffer: [], // Para secuencia de botones
+            specialBuffer: [],
             specialActive: false,
             specialTimer: 0,
             transformed: false,
@@ -455,14 +512,17 @@ class GameScene extends Phaser.Scene {
             transformActive: false,
             explosionBuffer: [],
             explosionPending: false,
-            explosionTimer: 0
+            explosionTimer: 0,
+            // AÑADE ESTO:
+            comboCount: 0,
+            lastComboTime: 0
         });
 
         this.players.push({
             sprite: p2Sprite, health: 1000, energy: 500, blocking: false,
             lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 1,
             hitCount: 0, beingHit: false, hitTimer: 0,
-            specialBuffer: [], // Para secuencia de botones
+            specialBuffer: [],
             specialActive: false,
             specialTimer: 0,
             transformed: false,
@@ -471,7 +531,10 @@ class GameScene extends Phaser.Scene {
             transformActive: false,
             explosionBuffer: [],
             explosionPending: false,
-            explosionTimer: 0
+            explosionTimer: 0,
+            // AÑADE ESTO:
+            comboCount: 0,
+            lastComboTime: 0
         });
 
         // Colliders
@@ -641,14 +704,11 @@ class GameScene extends Phaser.Scene {
 
         if (blockOrCharge) {
             if (dist > chargeDistance) {
-                // Cargar energía (lejos)
                 player.blocking = false;
-                sprite.setTint(0x2222cc); // Color para cargar
-                player.energy = Math.min(500, player.energy + 2.0); // Carga más rápida
+                // cargar energía...
             } else {
-                // Bloquear (cerca)
                 player.blocking = true;
-                sprite.setTint(0x336633); // Color para bloquear
+                // bloquear...
             }
             // No puede moverse, saltar, disparar ni pegar
             sprite.setVelocityX(0);
@@ -658,20 +718,24 @@ class GameScene extends Phaser.Scene {
             sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
         }
 
+        let slowFactor = 1;
+        if (player.slowedUntil && this.time.now < player.slowedUntil) {
+            slowFactor = 0.45; // Reduce la velocidad, salto y puñetazo a 45%
+        } else {
+            player.slowedUntil = null;
+        }
+
         // Movimiento solo si NO está bloqueando/cargando
-        const speed = 220;
+        const speed = 220 * slowFactor;
         if (left) { sprite.setVelocityX(-speed); sprite.flipX = true; }
         else if (right) { sprite.setVelocityX(speed); sprite.flipX = false; }
         else { sprite.setVelocityX(0); }
 
         // Saltar
-        if (up && sprite.body.onFloor()) sprite.setVelocityY(-560);
-
-        // Pequeña recarga pasiva
-        player.energy = Math.min(500, player.energy + 0.05);
+        if (up && sprite.body.onFloor()) sprite.setVelocityY(-560 * slowFactor);
 
         // Puñetazo: 50 de daño
-        if (punch && (time - player.lastPunch) > player.punchCD) {
+        if (punch && (time - player.lastPunch) > player.punchCD * (1 / slowFactor)) {
             player.lastPunch = time;
             this.doPunch(i);
         }
@@ -686,6 +750,11 @@ class GameScene extends Phaser.Scene {
         this.handleCharlesSpecial(i, time);
         this.handleCharlesTransform(i, time);
         this.handleCharlesExplosion(i, time);
+        this.handleSofiaLaser(i, time);
+        this.handleSofiaTeleport(i, time);
+        this.handleSofiaMeteor(i, time);
+        this.handleFranchescaAura(i, time);
+        this.handleFranchescaJumpSmash(i, time);
     }
 
     spawnProjectile(i) {
@@ -710,46 +779,36 @@ class GameScene extends Phaser.Scene {
     }
 
     doPunch(i) {
-        const attacker = this.players[i];
-        const target = this.players[1 - i];
-        const dist = Phaser.Math.Distance.Between(attacker.sprite.x, attacker.sprite.y, target.sprite.x, target.sprite.y);
+        const player = this.players[i];
+        const enemy = this.players[1 - i];
 
-        // Solo cuenta como golpe si el objetivo NO está siendo golpeado
-        if (dist < 90 && !target.beingHit) {
-            // Si Charles está transformado
-            const isCharlesTrans = attacker.transformed && ((i === 0 && this.player1Index === 0) || (i === 1 && this.player2Index === 0));
-            if (!target.blocking) {
-                attacker.hitCount = (attacker.hitCount || 0) + 1;
-                // Daño aumentado si está transformado
-                const damage = isCharlesTrans ? 80 : 50;
-                target.health = Math.max(0, target.health - damage);
+        // Si el jugador está bloqueando o cargando energía, no puede golpear
+        if (player.blocking) return;
 
-                // Cada 3er golpe: golpe fuerte (solo si NO está bloqueando)
-                if (attacker.hitCount % 3 === 0) {
-                    const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
-                    const horizontal = 1800 * dir;
-                    const vertical = -250;
-                    target.sprite.setVelocity(horizontal, vertical);
-                }
-            } else {
-                // Si Charles está transformado y el objetivo bloquea, recibe daño constante por 1.5s
-                if (isCharlesTrans) {
-                    // Aplica daño constante por 1.5 segundos (25 por segundo)
-                    const now = this.time.now;
-                    if (!target.blockingDamageEnd || now > target.blockingDamageEnd) {
-                        target.blockingDamageEnd = now + 1500;
-                    }
-                    target.blockingDamagePerSecond = 25;
-                } else {
-                    attacker.hitCount = 0;
-                }
-            }
+        // Si el enemigo está bloqueando, solo recibe poco daño y no empuje
+        if (enemy.blocking) {
+            enemy.health = Math.max(0, enemy.health - 5);
+            player.comboCount = 0; // Se corta la secuencia
+            return;
+        }
 
-            // Marcar como siendo golpeado (stun)
-            target.beingHit = true;
-            target.hitTimer = this.time.now + 400;
-            const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
-            attacker.sprite.setVelocityX(120 * dir);
+        // Combo: si el tiempo entre golpes es corto, suma combo
+        const now = this.time.now;
+        if (!player.lastComboTime || now - player.lastComboTime > 700) {
+            player.comboCount = 1;
+        } else {
+            player.comboCount = (player.comboCount || 1) + 1;
+        }
+        player.lastComboTime = now;
+
+        // Daño normal
+        enemy.health = Math.max(0, enemy.health - 20);
+
+        // Si es el tercer golpe seguido, empuje horizontal fuerte
+        if (player.comboCount === 3) {
+            const dir = player.sprite.flipX ? -1 : 1;
+            enemy.sprite.setVelocityX(1200 * dir); // Empuje más potente
+            player.comboCount = 0; // Reinicia combo
         }
     }
 
@@ -988,7 +1047,7 @@ class GameScene extends Phaser.Scene {
             player.explosionBuffer[0].k === "R" &&
             player.explosionBuffer[1].k === "R" &&
             player.explosionBuffer[2].k === "X"
-        ) {
+        ) {r
             // Gasta energía y programa la explosión
             player.energy = Math.max(0, player.energy - 180);
             player.explosionPending = true;
@@ -996,4 +1055,500 @@ class GameScene extends Phaser.Scene {
             player.explosionBuffer = [];
         }
     }
+
+    handleSofiaLaser(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Solo Sofia (índice 1 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 1) || (i === 1 && this.player2Index !== 1)) return;
+
+        if (!player.sofiaLaserBuffer) player.sofiaLaserBuffer = [];
+
+        // Detectar secuencia: IZQ, DER, GOLPE (en menos de 1s entre cada uno)
+        // Solo si tiene suficiente energía (100)
+        if (player.energy < 100) {
+            player.sofiaLaserBuffer = [];
+            return;
+        }
+
+        // Detectar teclas o gamepad
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX < -0.7 && !pad._sofiaLeft) { input = "L"; pad._sofiaLeft = true; }
+            if (axisX > 0.7 && !pad._sofiaRight) { input = "R"; pad._sofiaRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) { pad._sofiaLeft = pad._sofiaRight = false; }
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._sofiaHit) { input = "X"; pad._sofiaHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._sofiaHit = false;
+        }
+
+        // Buffer de secuencia
+        if (input) {
+            const now = time;
+            if (player.sofiaLaserBuffer.length === 0 || (now - (player.sofiaLaserBuffer[player.sofiaLaserBuffer.length - 1].t)) < 1000) {
+                player.sofiaLaserBuffer.push({ k: input, t: now });
+                if (player.sofiaLaserBuffer.length > 3) player.sofiaLaserBuffer.shift();
+            } else {
+                player.sofiaLaserBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verificar secuencia
+        if (
+            player.sofiaLaserBuffer.length === 3 &&
+            player.sofiaLaserBuffer[0].k === "L" &&
+            player.sofiaLaserBuffer[1].k === "R" &&
+            player.sofiaLaserBuffer[2].k === "X"
+        ) {
+            // Gasta energía y dispara el láser
+            player.energy = Math.max(0, player.energy - 100);
+            const target = this.players[1 - i];
+
+            // Efecto visual simple: línea láser
+            const laser = this.add.line(
+                0, 0,
+                sprite.x, sprite.y,
+                target.sprite.x, target.sprite.y,
+                0x00ffff
+            ).setOrigin(0, 0).setLineWidth(6);
+
+            this.time.delayedCall(180, () => { if (laser && laser.scene) laser.destroy(); });
+
+            // Si el objetivo está bloqueando, no recibe daño ni efecto
+            if (target.blocking) {
+                player.sofiaLaserBuffer = [];
+                return;
+            }
+
+            // Daño y teletransporte a un lado de Sofia
+            target.health = Math.max(0, target.health - 10);
+
+            // Teletransporta al enemigo a un lado de Sofia (como el teletransporte)
+            const offset = 60;
+            let newX = sprite.x;
+            if (target.sprite.x < sprite.x) {
+                newX = sprite.x - offset;
+            } else {
+                newX = sprite.x + offset;
+            }
+            target.sprite.x = newX;
+            target.sprite.y = sprite.y;
+            target.sprite.setVelocity(0, 0);
+
+            // Aplica reducción de velocidad y salto y puñetazo (no afecta cargar, bloquear, disparar ni habilidades)
+            target.slowedUntil = this.time.now + 1800; // 1.8 segundos de lentitud
+
+            player.sofiaLaserBuffer = [];
+        }
+    }
+
+    handleSofiaTeleport(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Solo Sofia (índice 1 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 1) || (i === 1 && this.player2Index !== 1)) return;
+
+        // Inicializa el buffer si no existe
+        if (!player.sofiaTeleportBuffer) player.sofiaTeleportBuffer = [];
+
+        // Costo de energía
+        if (player.energy < 120) {
+            player.sofiaTeleportBuffer = [];
+            return;
+        }
+
+        // Detectar secuencia: DERECHA, IZQ, GOLPE (en menos de 1s entre cada uno)
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._sofiaTRight) { input = "R"; pad._sofiaTRight = true; }
+            if (axisX < -0.7 && !pad._sofiaTLeft) { input = "L"; pad._sofiaTLeft = true; }
+            if (axisX > -0.7 && axisX < 0.7) { pad._sofiaTRight = false; pad._sofiaTLeft = false; }
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._sofiaTHit) { input = "X"; pad._sofiaTHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._sofiaTHit = false;
+        }
+
+        // Buffer de secuencia
+        if (input) {
+            const now = time;
+            if (player.sofiaTeleportBuffer.length === 0 || (now - (player.sofiaTeleportBuffer[player.sofiaTeleportBuffer.length - 1].t)) < 1000) {
+                player.sofiaTeleportBuffer.push({ k: input, t: now });
+                if (player.sofiaTeleportBuffer.length > 3) player.sofiaTeleportBuffer.shift();
+            } else {
+                player.sofiaTeleportBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verificar secuencia
+        if (
+            player.sofiaTeleportBuffer.length === 3 &&
+            player.sofiaTeleportBuffer[0].k === "R" &&
+            player.sofiaTeleportBuffer[1].k === "L" &&
+            player.sofiaTeleportBuffer[2].k === "X"
+        ) {
+            // Gasta energía
+            player.energy = Math.max(0, player.energy - 120);
+            const target = this.players[1 - i];
+
+            // Teletransporta a Sofia a un lado del enemigo (a la derecha o izquierda según su posición)
+            const offset = 60; // Distancia al costado
+            let newX = target.sprite.x;
+            if (sprite.x < target.sprite.x) {
+                newX = target.sprite.x - offset;
+            } else {
+                newX = target.sprite.x + offset;
+            }
+            sprite.x = newX;
+            sprite.y = target.sprite.y;
+            sprite.setVelocity(0, 0);
+
+            // Si Sofia queda cerca tras el teletransporte y el enemigo no está bloqueando, hace daño
+            const maxHitDist = 120; // Si está más lejos, no recibe daño
+            const dx = target.sprite.x - sprite.x;
+            const dy = target.sprite.y - sprite.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist <= maxHitDist && !target.blocking) {
+                target.health = Math.max(0, target.health - 40);
+                this.cameras.main.flash(100, 100, 255, 255);
+            }
+
+            player.sofiaTeleportBuffer = [];
+        }
+    }
+
+    handleSofiaMeteor(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Solo Sofia (índice 1 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 1) || (i === 1 && this.player2Index !== 1)) return;
+
+        // Inicializa el buffer si no existe
+        if (!player.sofiaMeteorBuffer) player.sofiaMeteorBuffer = [];
+
+        // Costo de energía
+        if (player.energy < 350) {
+            player.sofiaMeteorBuffer = [];
+            return;
+        }
+
+        // Detectar secuencia: DERECHA, DERECHA, GOLPE (en menos de 1s entre cada uno)
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._sofiaMRight) { input = "R"; pad._sofiaMRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) pad._sofiaMRight = false;
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._sofiaMHit) { input = "X"; pad._sofiaMHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._sofiaMHit = false;
+        }
+
+        // Buffer de secuencia
+        if (input) {
+            const now = time;
+            if (player.sofiaMeteorBuffer.length === 0 || (now - (player.sofiaMeteorBuffer[player.sofiaMeteorBuffer.length - 1].t)) < 1000) {
+                player.sofiaMeteorBuffer.push({ k: input, t: now });
+                if (player.sofiaMeteorBuffer.length > 3) player.sofiaMeteorBuffer.shift();
+            } else {
+                player.sofiaMeteorBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verificar secuencia
+        if (
+            player.sofiaMeteorBuffer.length === 3 &&
+            player.sofiaMeteorBuffer[0].k === "R" &&
+            player.sofiaMeteorBuffer[1].k === "R" &&
+            player.sofiaMeteorBuffer[2].k === "X"
+        ) {
+            // Gasta energía
+            player.energy = Math.max(0, player.energy - 350);
+            const target = this.players[1 - i];
+
+            // Invoca el meteoro encima del enemigo
+            const meteorX = target.sprite.x;
+            const meteorStartY = target.sprite.y - 400; // Muy arriba del enemigo
+            const meteorEndY = this.ground.y - 60; // Justo sobre el suelo
+
+            // Crea el meteoro (un círculo más grande)
+            const meteor = this.add.circle(meteorX, meteorStartY, 80, 0x888888).setDepth(10); // Antes era 48
+            this.tweens.add({
+                targets: meteor,
+                y: meteorEndY,
+                duration: 1600, // Tarda 1.6 segundos en caer
+                ease: 'Quad.easeIn',
+                onComplete: () => {
+                    // Efecto de impacto
+                    this.cameras.main.shake(200, 0.01);
+                    this.cameras.main.flash(120, 255, 200, 100);
+
+                    // Detección de daño
+                    const enemy = target;
+                    const ex = enemy.sprite.x;
+                    const ey = enemy.sprite.y;
+                    const mx = meteor.x;
+                    const my = meteorEndY;
+
+                    // Rango de impacto
+                    const centerRadius = 56; // Antes 32, ahora más grande
+                    const outerRadius = 160; // Antes 90, ahora más grande
+
+                    const dist = Phaser.Math.Distance.Between(mx, this.ground.y, ex, ey + 48); // +48 para el centro del sprite
+
+                    if (dist <= centerRadius) {
+                        enemy.health = Math.max(0, enemy.health - 150);
+                    } else if (dist <= outerRadius) {
+                        enemy.health = Math.max(0, enemy.health - 100);
+                    }
+                    // Efecto visual de explosión
+                    const explosion = this.add.circle(mx, this.ground.y, outerRadius, 0xffcc00, 0.3).setDepth(9);
+                    this.time.delayedCall(300, () => { if (explosion && explosion.scene) explosion.destroy(); });
+                    if (meteor && meteor.scene) meteor.destroy();
+                }
+            });
+
+            player.sofiaMeteorBuffer = [];
+        }
+    }
+
+    handleFranchescaAura(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Solo Franchesca (índice 2 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 2) || (i === 1 && this.player2Index !== 2)) return;
+
+        // Inicializa el buffer si no existe
+        if (!player.franchescaAuraBuffer) player.franchescaAuraBuffer = [];
+        if (!player.franchescaAuraActive) player.franchescaAuraActive = false;
+        if (!player.franchescaAuraSprite) player.franchescaAuraSprite = null;
+        if (!player.franchescaAuraLastTick) player.franchescaAuraLastTick = 0;
+
+        // Detectar secuencia: IZQ, DER, GOLPE (en menos de 1s entre cada uno)
+        if (!player.franchescaAuraActive && player.energy < 120) {
+            player.franchescaAuraBuffer = [];
+            return;
+        }
+
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX < -0.7 && !pad._franLeft) { input = "L"; pad._franLeft = true; }
+            if (axisX > 0.7 && !pad._franRight) { input = "R"; pad._franRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) { pad._franLeft = pad._franRight = false; }
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._franHit) { input = "X"; pad._franHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._franHit = false;
+        }
+
+        // Buffer de secuencia
+        if (input) {
+            const now = time;
+            if (player.franchescaAuraBuffer.length === 0 || (now - (player.franchescaAuraBuffer[player.franchescaAuraBuffer.length - 1].t)) < 1000) {
+                player.franchescaAuraBuffer.push({ k: input, t: now });
+                if (player.franchescaAuraBuffer.length > 3) player.franchescaAuraBuffer.shift();
+            } else {
+                player.franchescaAuraBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verificar secuencia para activar el aura
+        if (
+            !player.franchescaAuraActive &&
+            player.franchescaAuraBuffer.length === 3 &&
+            player.franchescaAuraBuffer[0].k === "L" &&
+            player.franchescaAuraBuffer[1].k === "R" &&
+            player.franchescaAuraBuffer[2].k === "X"
+        ) {
+            // Gasta energía inicial y activa el aura
+            player.energy = Math.max(0, player.energy - 120);
+            player.franchescaAuraActive = true;
+            player.franchescaAuraLastTick = time;
+            // Crea el aura visual (radio 200)
+            if (player.franchescaAuraSprite) player.franchescaAuraSprite.destroy();
+            player.franchescaAuraSprite = this.add.circle(sprite.x, sprite.y, 200, 0xff00cc, 0.25).setDepth(8);
+            player.franchescaAuraBuffer = [];
+        }
+
+        // Si el aura está activa, mantenerla mientras se mantenga presionado el botón de golpe y haya energía
+        if (player.franchescaAuraActive) {
+            // Actualiza la posición del aura visual
+            if (player.franchescaAuraSprite) {
+                player.franchescaAuraSprite.x = sprite.x;
+                player.franchescaAuraSprite.y = sprite.y;
+            }
+
+            // Detectar si el botón de golpe sigue presionado
+            let holding = false;
+            if (i === 0) {
+                holding = this.keysP1.hit.isDown;
+            } else {
+                holding = this.keysP2.hit.isDown;
+            }
+            if (pad && pad.connected) {
+                holding = holding || (pad.buttons[2] && pad.buttons[2].pressed);
+            }
+
+            // Si no está presionando el botón o no tiene energía suficiente, desactiva el aura
+            if (!holding || player.energy < 100) {
+                player.franchescaAuraActive = false;
+                if (player.franchescaAuraSprite) { player.franchescaAuraSprite.destroy(); player.franchescaAuraSprite = null; }
+                return;
+            }
+
+            // Gasta energía constante
+            if (time - player.franchescaAuraLastTick > 1000) {
+                player.energy = Math.max(0, player.energy - 100);
+                player.franchescaAuraLastTick = time;
+                // Si se queda sin energía, desactiva el aura
+                if (player.energy < 100) {
+                    player.franchescaAuraActive = false;
+                    if (player.franchescaAuraSprite) { player.franchescaAuraSprite.destroy(); player.franchescaAuraSprite = null; }
+                    return;
+                }
+            }
+
+            // Daño al enemigo si está dentro del área y no está bloqueando
+            const target = this.players[1 - i];
+            const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, target.sprite.x, target.sprite.y);
+            if (dist <= 200) {
+                if (!target.blocking) {
+                    const dt = this.game.loop.delta / 1000;
+                    target.health = Math.max(0, target.health - 40 * dt);
+
+                }
+            }
+        }
+    }
+
+    handleFranchescaJumpSmash(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Solo Franchesca (índice 2 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 2) || ( i === 1 && this.player2Index !== 2)) return;
+
+        // Inicializa el buffer si no existe
+        if (!player.franchescaJumpBuffer) player.franchescaJumpBuffer = [];
+        if (!player.franchescaJumpPending) player.franchescaJumpPending = false;
+
+        // Detectar secuencia: DERECHA, IZQ, GOLPE (en menos de 1s entre cada uno)
+        if (!player.franchescaJumpPending && player.energy < 120) {
+            player.franchescaJumpBuffer = [];
+            return;
+        }
+
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._franJRight) { input = "R"; pad._franJRight = true; }
+            if (axisX < -0.7 && !pad._franJLeft) { input = "L"; pad._franJLeft = true; }
+            if (axisX > -0.7 && axisX < 0.7) { pad._franJRight = false; pad._franJLeft = false; }
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._franJHit) { input = "X"; pad._franJHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._franJHit = false;
+        }
+
+        // Buffer de secuencia
+        if (input) {
+            const now = time;
+            if (player.franchescaJumpBuffer.length === 0 || (now - (player.franchescaJumpBuffer[player.franchescaJumpBuffer.length - 1].t)) < 1000) {
+                player.franchescaJumpBuffer.push({ k: input, t: now });
+                if (player.franchescaJumpBuffer.length > 3) player.franchescaJumpBuffer.shift();
+            } else {
+                player.franchescaJumpBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verificar secuencia para activar el salto y smash
+        if (
+            !player.franchescaJumpPending &&
+            player.franchescaJumpBuffer.length === 3 &&
+            player.franchescaJumpBuffer[0].k === "R" &&
+            player.franchescaJumpBuffer[1].k === "L" &&
+            player.franchescaJumpBuffer[2].k === "X"
+        ) {
+            // Gasta energía y realiza el salto
+            player.energy = Math.max(0, player.energy - 120);
+            player.franchescaJumpPending = true;
+            sprite.setVelocityY(-500); // Salto rápido
+            sprite.setTint(0xff99ff);
+
+            // Después de 0.7 segundos, realiza el golpe en área EN EL AIRE (no al tocar el piso)
+            this.time.delayedCall(700, () => {
+                // Efecto visual de área (radio 350)
+                const smashCircle = this.add.circle(sprite.x, sprite.y, 350, 0xff00cc, 0.18).setDepth(9);
+                this.cameras.main.shake(180, 0.01);
+
+                // Daño al enemigo si está dentro del área y no está bloqueando
+                const target = this.players[1 - i];
+                const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, target.sprite.x, target.sprite.y);
+                if (dist <= 350 && !target.blocking) {
+                    target.health = Math.max(0, target.health - 180);
+                }
+
+                this.time.delayedCall(300, () => {
+                    if (smashCircle && smashCircle.scene) smashCircle.destroy();
+                });
+
+                player.franchescaJumpBuffer = [];
+                player.franchescaJumpPending = false;
+                sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
+            });
+        }
+    }
 }
+
