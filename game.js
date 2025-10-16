@@ -506,7 +506,10 @@ class GameScene extends Phaser.Scene {
             franchescaEnergyTimer: 0,
             sofiaLaserBuffer: [],
             sofiaTeleportBuffer: [],
-            sofiaMeteorBuffer: []
+            sofiaMeteorBuffer: [],
+            franchescaJumpBuffer: [],
+            franchescaJumpPending: false,
+            franchescaJumpTimer: 0,
         });
 
         this.players.push({
@@ -529,6 +532,9 @@ class GameScene extends Phaser.Scene {
             sofiaLaserBuffer: [],
             sofiaTeleportBuffer: [],
             sofiaMeteorBuffer: [],
+            franchescaJumpBuffer: [],
+            franchescaJumpPending: false,
+            franchescaJumpTimer: 0,
         });
 
         // Colliders
@@ -747,6 +753,7 @@ class GameScene extends Phaser.Scene {
         this.handleSofiaTeleport(i, time);
         this.handleSofiaMeteor(i, time);
         this.handleFranchescaEnergy(i, time);
+        this.handleFranchescaJumpSlash(i, time);
     }
 
     spawnProjectile(i) {
@@ -1405,6 +1412,97 @@ class GameScene extends Phaser.Scene {
             player.franchescaEnergyActive = true;
             player.franchescaEnergyDeactivateTime = null;
             player.franchescaEnergyBuffer = [];
+        }
+    }
+
+    handleFranchescaJumpSlash(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+
+       
+        // Solo Franchesca (índice 2 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 2) || (i === 1 && this.player2Index !== 2)) return;
+
+        // Si la habilidad está pendiente, no puede moverse ni hacer nada
+        if (player.franchescaJumpPending) {
+            sprite.setVelocityX(0);
+            // Espera el timer para el corte
+            if (time > player.franchescaJumpTimer) {
+                player.franchescaJumpPending = false;
+                // Ataque en área
+                const target = this.players[1 - i];
+                const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, target.sprite.x, target.sprite.y);
+                // Efecto visual: círculo de corte
+                const slashCircle = this.add.circle(sprite.x, sprite.y, 300, 0xff00cc, 0.18).setDepth(9);
+                this.cameras.main.shake(180, 0.02);
+
+                // Daño si el enemigo no está bloqueando
+                if (dist <= 300 && !target.blocking) {
+                    target.health = Math.max(0, target.health - 250);
+                }
+
+                // Eliminar el círculo después de 0.4s
+                this.time.delayedCall(400, () => {
+                    if (slashCircle && slashCircle.scene) slashCircle.destroy();
+                });
+
+                sprite.setTint(i === 0 ? 0x00ffff : 0xff0066); // Color normal
+            }
+            return;
+        }
+
+        // Detectar secuencia: DERECHA, IZQUIERDA, GOLPE (en menos de 1s entre cada uno)
+        if (player.energy < 250) {
+            player.franchescaJumpBuffer = [];
+            return;
+        }
+
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._franJumpRight) { input = "R"; pad._franJumpRight = true; }
+            if (axisX < -0.7 && !pad._franJumpLeft) { input = "L"; pad._franJumpLeft = true; }
+            if (axisX > -0.7 && axisX < 0.7) { pad._franJumpLeft = pad._franJumpRight = false; }
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._franJumpHit) { input = "X"; pad._franJumpHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._franJumpHit = false;
+        }
+
+        if (input) {
+            const now = time;
+            if (player.franchescaJumpBuffer.length === 0 || (now - (player.franchescaJumpBuffer[player.franchescaJumpBuffer.length - 1].t)) < 1000) {
+                player.franchescaJumpBuffer.push({ k: input, t: now });
+                if (player.franchescaJumpBuffer.length > 3) player.franchescaJumpBuffer.shift();
+            } else {
+                player.franchescaJumpBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verifica la secuencia
+        if (
+            player.franchescaJumpBuffer.length === 3 &&
+            player.franchescaJumpBuffer[0].k === "R" &&
+            player.franchescaJumpBuffer[1].k === "L" &&
+            player.franchescaJumpBuffer[2].k === "X"
+        ) {
+            // Gasta energía y realiza el salto
+            player.energy = Math.max(0, player.energy - 250);
+            player.franchescaJumpPending = true;
+            player.franchescaJumpTimer = time + 700; // 0.7 segundos de salto antes del corte
+            sprite.setVelocityY(-520); // Salto rápido
+            sprite.setTint(0xff99ff); // Color especial durante la habilidad
+            player.franchescaJumpBuffer = [];
         }
     }
 }
