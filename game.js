@@ -491,7 +491,7 @@ class GameScene extends Phaser.Scene {
             sprite: p1Sprite, health: 1000, energy: 500, blocking: false,
             lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 0,
             hitCount: 0, beingHit: false, hitTimer: 0,
-            specialBuffer: [], // Para secuencia de botones
+            specialBuffer: [],
             specialActive: false,
             specialTimer: 0,
             transformed: false,
@@ -500,7 +500,13 @@ class GameScene extends Phaser.Scene {
             transformActive: false,
             explosionBuffer: [],
             explosionPending: false,
-            explosionTimer: 0
+            explosionTimer: 0,
+            franchescaEnergyBuffer: [],
+            franchescaEnergyActive: false,
+            franchescaEnergyTimer: 0,
+            sofiaLaserBuffer: [],
+            sofiaTeleportBuffer: [],
+            sofiaMeteorBuffer: []
         });
 
         this.players.push({
@@ -516,7 +522,13 @@ class GameScene extends Phaser.Scene {
             transformActive: false,
             explosionBuffer: [],
             explosionPending: false,
-            explosionTimer: 0
+            explosionTimer: 0,
+            franchescaEnergyBuffer: [],
+            franchescaEnergyActive: false,
+            franchescaEnergyTimer: 0,
+            sofiaLaserBuffer: [],
+            sofiaTeleportBuffer: [],
+            sofiaMeteorBuffer: [],
         });
 
         // Colliders
@@ -734,6 +746,7 @@ class GameScene extends Phaser.Scene {
         this.handleSofiaLaser(i, time);
         this.handleSofiaTeleport(i, time);
         this.handleSofiaMeteor(i, time);
+        this.handleFranchescaEnergy(i, time);
     }
 
     spawnProjectile(i) {
@@ -1280,6 +1293,118 @@ class GameScene extends Phaser.Scene {
             });
 
             player.sofiaMeteorBuffer = [];
+        }
+    }
+
+    handleFranchescaEnergy(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+
+        // Solo Franchesca (índice 2 en el selector de personaje)
+        if ((i === 0 && this.player1Index !== 2) || (i === 1 && this.player2Index !== 2)) return;
+
+        // Detectar si el botón de golpear está pulsado
+        let punchHeld = false;
+        // Teclado
+        if (i === 0) punchHeld = this.keysP1.hit.isDown;
+        else punchHeld = this.keysP2.hit.isDown;
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected && pad.buttons[2]) punchHeld = punchHeld || pad.buttons[2].pressed;
+
+        // Si la habilidad está activa, aplica daño constante y consume energía
+        if (player.franchescaEnergyActive) {
+            // No puede moverse mientras la habilidad está activa
+            sprite.setVelocityX(0);
+
+            if (player.energy >= 100 * (this.game.loop.delta / 1000)) {
+                player.energy = Math.max(0, player.energy - 100 * (this.game.loop.delta / 1000));
+                const target = this.players[1 - i];
+                const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, target.sprite.x, target.sprite.y);
+                // SOLO daña si el enemigo NO está bloqueando
+                if (dist <= 200 && !target.blocking) {
+                    const dt = this.game.loop.delta / 1000;
+                    target.health = Math.max(0, target.health - 15 * dt);
+                }
+                // Efecto visual: círculo de energía
+                if (!player._energyCircle || !player._energyCircle.scene) {
+                    player._energyCircle = this.add.circle(sprite.x, sprite.y, 200, 0xff00cc, 0.13).setDepth(8);
+                } else {
+                    player._energyCircle.x = sprite.x;
+                    player._energyCircle.y = sprite.y;
+                }
+
+                // Si suelta el botón, programa desactivación en 0.7s
+                if (!punchHeld) {
+                    if (!player.franchescaEnergyDeactivateTime) {
+                        player.franchescaEnergyDeactivateTime = time + 700;
+                    }
+                } else {
+                    player.franchescaEnergyDeactivateTime = null;
+                }
+
+                // Termina si se queda sin energía o pasa el tiempo de desactivación
+                if (player.energy <= 0 || (player.franchescaEnergyDeactivateTime && time > player.franchescaEnergyDeactivateTime)) {
+                    player.franchescaEnergyActive = false;
+                    player.franchescaEnergyDeactivateTime = null;
+                    if (player._energyCircle && player._energyCircle.scene) player._energyCircle.destroy();
+                }
+            } else {
+                player.franchescaEnergyActive = false;
+                player.franchescaEnergyDeactivateTime = null;
+                if (player._energyCircle && player._energyCircle.scene) player._energyCircle.destroy();
+            }
+            return;
+        }
+
+        // Detectar secuencia: IZQ, DER, GOLPE (en menos de 1s entre cada uno)
+        if (player.energy < 100) {
+            player.franchescaEnergyBuffer = [];
+            return;
+        }
+
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        // Gamepad
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX < -0.7 && !pad._franLeft) { input = "L"; pad._franLeft = true; }
+            if (axisX > 0.7 && !pad._franRight) { input = "R"; pad._franRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) { pad._franLeft = pad._franRight = false; }
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._franHit) { input = "X"; pad._franHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._franHit = false;
+        }
+
+        if (input) {
+            const now = time;
+            if (player.franchescaEnergyBuffer.length === 0 || (now - (player.franchescaEnergyBuffer[player.franchescaEnergyBuffer.length - 1].t)) < 1000) {
+                player.franchescaEnergyBuffer.push({ k: input, t: now });
+                if (player.franchescaEnergyBuffer.length > 3) player.franchescaEnergyBuffer.shift();
+            } else {
+                player.franchescaEnergyBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verifica la secuencia
+        if (
+            player.franchescaEnergyBuffer.length === 3 &&
+            player.franchescaEnergyBuffer[0].k === "L" &&
+            player.franchescaEnergyBuffer[1].k === "R" &&
+            player.franchescaEnergyBuffer[2].k === "X"
+        ) {
+            // Activa la habilidad
+            player.franchescaEnergyActive = true;
+            player.franchescaEnergyDeactivateTime = null;
+            player.franchescaEnergyBuffer = [];
         }
     }
 }
