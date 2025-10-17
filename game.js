@@ -263,9 +263,10 @@ class CharacterSelector extends Phaser.Scene {
         this.characters.forEach((char, i) => {
             const box = this.add.rectangle(startX, centerY, rectWidth, rectHeight, char.color).setStrokeStyle(2, 0x000000).setInteractive();
             this.add.text(startX, centerY + rectHeight / 2 + 25, char.name, { font: "22px Arial", color: "#00ffff" }).setOrigin(0.5);
-            box.on('pointerdown', () => {
-                // if clicked, assign to a player depending on last input: here assign to player1 by default
+            // click assigns to player1 by default and unconfirms player1 (so they must confirm again)
+            box.on('pointerdown', (ptr) => {
                 this.playerSelections[0].index = i;
+                this.unconfirmSelection(0);
                 this.updateSelectors();
             });
             this.characterRects.push(box);
@@ -277,6 +278,9 @@ class CharacterSelector extends Phaser.Scene {
             this.add.rectangle(this.characterRects[this.playerSelections[0].index].x, centerY, rectWidth + 12, rectHeight + 12).setStrokeStyle(4, 0xffff00).setOrigin(0.5),
             this.add.rectangle(this.characterRects[this.playerSelections[1].index].x, centerY, rectWidth + 12, rectHeight + 12).setStrokeStyle(4, 0xffaa00).setOrigin(0.5)
         ];
+
+        // confirmed flags (both must be true to advance)
+        this.confirmed = [false, false];
 
         // Keyboard controls for selection:
         // Player1 uses A/D and SPACE to confirm
@@ -303,25 +307,52 @@ class CharacterSelector extends Phaser.Scene {
         this.updateSelectors();
     }
 
+    // helper: confirm/unconfirm visuals and logic
+    confirmSelection(idx) {
+        this.confirmed[idx] = true;
+        // set stroke to green when confirmed
+        if (this.playerSelectors[idx]) this.playerSelectors[idx].setStrokeStyle(4, 0x00ff00);
+        // advance only if both confirmed
+        if (this.confirmed[0] && this.confirmed[1]) {
+            this.scene.start("MapSelector", {
+                player1: this.playerSelections[0].index,
+                player2: this.playerSelections[1].index,
+                mode: this.selectedMode
+            });
+        }
+    }
+    unconfirmSelection(idx) {
+        this.confirmed[idx] = false;
+        // restore original color
+        if (this.playerSelectors[idx]) {
+            const color = (idx === 0) ? 0xffff00 : 0xffaa00;
+            this.playerSelectors[idx].setStrokeStyle(4, color);
+        }
+    }
+
     update() {
         // Gamepad navigation for two controllers (index 0 and 1)
         const pads = this.input.gamepad.gamepads;
 
         // Player1 keyboard nav
-        if (Phaser.Input.Keyboard.JustDown(this.keyLeftP1)) { this.playerSelections[0].index = Phaser.Math.Wrap(this.playerSelections[0].index - 1, 0, this.characterRects.length); this.updateSelectors(); }
-        if (Phaser.Input.Keyboard.JustDown(this.keyRightP1)) { this.playerSelections[0].index = Phaser.Math.Wrap(this.playerSelections[0].index + 1, 0, this.characterRects.length); this.updateSelectors(); }
+        if (Phaser.Input.Keyboard.JustDown(this.keyLeftP1)) { this.playerSelections[0].index = Phaser.Math.Wrap(this.playerSelections[0].index - 1, 0, this.characterRects.length); this.unconfirmSelection(0); this.updateSelectors(); }
+        if (Phaser.Input.Keyboard.JustDown(this.keyRightP1)) { this.playerSelections[0].index = Phaser.Math.Wrap(this.playerSelections[0].index + 1, 0, this.characterRects.length); this.unconfirmSelection(0); this.updateSelectors(); }
         // Player2 keyboard nav
-        if (Phaser.Input.Keyboard.JustDown(this.keyLeftP2)) { this.playerSelections[1].index = Phaser.Math.Wrap(this.playerSelections[1].index - 1, 0, this.characterRects.length); this.updateSelectors(); }
-        if (Phaser.Input.Keyboard.JustDown(this.keyRightP2)) { this.playerSelections[1].index = Phaser.Math.Wrap(this.playerSelections[1].index + 1, 0, this.characterRects.length); this.updateSelectors(); }
+        if (Phaser.Input.Keyboard.JustDown(this.keyLeftP2)) { this.playerSelections[1].index = Phaser.Math.Wrap(this.playerSelections[1].index - 1, 0, this.characterRects.length); this.unconfirmSelection(1); this.updateSelectors(); }
+        if (Phaser.Input.Keyboard.JustDown(this.keyRightP2)) { this.playerSelections[1].index = Phaser.Math.Wrap(this.playerSelections[1].index + 1, 0, this.characterRects.length); this.unconfirmSelection(1); this.updateSelectors(); }
 
-        // Confirm with keyboard: either player confirms -> start GameScene with both selections
-        if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) || Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)) {
-            this.scene.start("MapSelector", { player1: this.playerSelections[0].index, player2: this.playerSelections[1].index, mode: this.selectedMode });
+        // Confirm with keyboard: mark respective player as confirmed; only start when both confirmed
+        if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP1)) this.confirmSelection(0);
+        if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)) this.confirmSelection(1);
+
+        // Back: unconfirm or go back to ModeSelector if both unconfirmed
+        if (Phaser.Input.Keyboard.JustDown(this.keyBackP1)) {
+            if (this.confirmed[0]) this.unconfirmSelection(0);
+            else this.scene.start("ModeSelector");
         }
-
-        // Back
-        if (Phaser.Input.Keyboard.JustDown(this.keyBackP1) || Phaser.Input.Keyboard.JustDown(this.keyBackP2)) {
-            this.scene.start("ModeSelector");
+        if (Phaser.Input.Keyboard.JustDown(this.keyBackP2)) {
+            if (this.confirmed[1]) this.unconfirmSelection(1);
+            else this.scene.start("ModeSelector");
         }
 
         // Pads navigation (each pad controls its respective player selection)
@@ -330,25 +361,25 @@ class CharacterSelector extends Phaser.Scene {
             const x = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
             const sel = this.playerSelections[i] || this.playerSelections[0];
 
-            if (x < -0.55 && !pad._leftPressed) { sel.index = Phaser.Math.Wrap(sel.index - 1, 0, this.characterRects.length); pad._leftPressed = true; this.updateSelectors(); }
-            else if (x > 0.55 && !pad._rightPressed) { sel.index = Phaser.Math.Wrap(sel.index + 1, 0, this.characterRects.length); pad._rightPressed = true; this.updateSelectors(); }
+            if (x < -0.55 && !pad._leftPressed) { sel.index = Phaser.Math.Wrap(sel.index - 1, 0, this.characterRects.length); pad._leftPressed = true; this.unconfirmSelection(i); this.updateSelectors(); }
+            else if (x > 0.55 && !pad._rightPressed) { sel.index = Phaser.Math.Wrap(sel.index + 1, 0, this.characterRects.length); pad._rightPressed = true; this.unconfirmSelection(i); this.updateSelectors(); }
             else if (x > -0.55 && x < 0.55) pad._leftPressed = pad._rightPressed = false;
 
             // A confirm
             const a = pad.buttons[0] && pad.buttons[0].pressed;
             if (a && !pad._aPressed) {
-                this.scene.start("MapSelector", {
-                    player1: this.playerSelections[0].index,
-                    player2: this.playerSelections[1].index,
-                    mode: this.selectedMode
-                });
+                this.confirmSelection(i);
                 pad._aPressed = true;
             }
             if (!a) pad._aPressed = false;
 
             // B back
             const b = pad.buttons[1] && pad.buttons[1].pressed;
-            if (b && !pad._bPressed) { this.scene.start("Menu"); pad._bPressed = true; }
+            if (b && !pad._bPressed) {
+                if (this.confirmed[i]) this.unconfirmSelection(i);
+                else this.scene.start("ModeSelector");
+                pad._bPressed = true;
+            }
             if (!b) pad._bPressed = false;
         });
     }
@@ -510,6 +541,13 @@ class GameScene extends Phaser.Scene {
             franchescaJumpBuffer: [],
             franchescaJumpPending: false,
             franchescaJumpTimer: 0,
+            // propiedades para la habilidad de robo de Franchesca (iniciales)
+            franchescaLaserBuffer: [],
+            franchescaStolenAbility: null,       // { name, cost, source, timer }
+            franchescaStolenTimer: 0,
+            stolenAbilities: {},                  // { abilityName: true }
+            stolenAbilitiesTimers: {},            // { abilityName: timestamp }
+            franchescaUseBuffer: []               // buffer para usar habilidad robada (L,L,X)
         });
 
         this.players.push({
@@ -535,6 +573,13 @@ class GameScene extends Phaser.Scene {
             franchescaJumpBuffer: [],
             franchescaJumpPending: false,
             franchescaJumpTimer: 0,
+            // propiedades para la habilidad de robo de Franchesca (iniciales)
+            franchescaLaserBuffer: [],
+            franchescaStolenAbility: null,
+            franchescaStolenTimer: 0,
+            stolenAbilities: {},
+            stolenAbilitiesTimers: {},
+            franchescaUseBuffer: []
         });
 
         // Colliders
@@ -648,6 +693,34 @@ class GameScene extends Phaser.Scene {
             if (!proj) return;
             if (proj.x < -50 || proj.x > this.scale.width + 50) proj.destroy();
         });
+
+        // Manejo expiraciones de robos y la habilidad robada
+        for (let i = 0; i < 2; i++) {
+            const p = this.players[i];
+            if (!p) continue;
+
+            // 1) Si este jugador tenía una habilidad robada (es ladrón), expirar su habilidad robada
+            if (p.franchescaStolenAbility && time > p.franchescaStolenAbility.timer) {
+                p.franchescaStolenAbility = null;
+                p.franchescaStolenTimer = 0;
+                // opcional: feedback
+                if (p.sprite && p.sprite.setTint) p.sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
+                this.cameras.main.flash(120, 200, 255, 200);
+            }
+
+            // 2) Revisar habilidades específicas robadas del jugador (si le robaron)
+            for (const abilityName in p.stolenAbilitiesTimers) {
+                if (p.stolenAbilitiesTimers[abilityName] && time > p.stolenAbilitiesTimers[abilityName]) {
+                    delete p.stolenAbilities[abilityName];
+                    delete p.stolenAbilitiesTimers[abilityName];
+                    // si ya no tiene habilidades robadas, restaurar tint
+                    if (p.sprite && Object.keys(p.stolenAbilities).length === 0) {
+                        p.sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
+                        this.cameras.main.flash(120, 255, 255, 255);
+                    }
+                }
+            }
+        }
     }
 
     updatePlayerInput(i, time) {
@@ -754,6 +827,9 @@ class GameScene extends Phaser.Scene {
         this.handleSofiaMeteor(i, time);
         this.handleFranchescaEnergy(i, time);
         this.handleFranchescaJumpSlash(i, time);
+        this.handleFranchescaSteal(i, time);
+        // Permitir usar habilidad robada (L,L,X) si existe
+        this.handleFranchescaUseStolen(i, time);
     }
 
     spawnProjectile(i) {
@@ -1393,7 +1469,7 @@ class GameScene extends Phaser.Scene {
 
         if (input) {
             const now = time;
-            if (player.franchescaEnergyBuffer.length === 0 || (now - (player.franchescaEnergyBuffer[player.franchescaEnergyBuffer.length - 1].t)) < 1000) {
+            if ( player.franchescaEnergyBuffer.length === 0 || (now - (player.franchescaEnergyBuffer[player.franchescaEnergyBuffer.length - 1].t)) < 1000) {
                 player.franchescaEnergyBuffer.push({ k: input, t: now });
                 if (player.franchescaEnergyBuffer.length > 3) player.franchescaEnergyBuffer.shift();
             } else {
@@ -1503,6 +1579,238 @@ class GameScene extends Phaser.Scene {
             sprite.setVelocityY(-520); // Salto rápido
             sprite.setTint(0xff99ff); // Color especial durante la habilidad
             player.franchescaJumpBuffer = [];
+        }
+    }
+
+    // --- NUEVO: Habilidad de robo de Franchesca (DER, DER, GOLPE) ---
+    handleFranchescaSteal(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Sólo Franchesca (índice 2)
+        if ((i === 0 && this.player1Index !== 2) || (i === 1 && this.player2Index !== 2)) return;
+
+        if (!player.franchescaLaserBuffer) player.franchescaLaserBuffer = [];
+        if (player.energy < 300) { player.franchescaLaserBuffer = []; return; }
+
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._franStealRight) { input = "R"; pad._franStealRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) pad._franStealRight = false;
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._franStealHit) { input = "X"; pad._franStealHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._franStealHit = false;
+        }
+
+        if (input) {
+            const now = time;
+            if (player.franchescaLaserBuffer.length === 0 || (now - (player.franchescaLaserBuffer[player.franchescaLaserBuffer.length - 1].t)) < 1000) {
+                player.franchescaLaserBuffer.push({ k: input, t: now });
+                if (player.franchescaLaserBuffer.length > 3) player.franchescaLaserBuffer.shift();
+            } else {
+                player.franchescaLaserBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Define lista de habilidades robables del objetivo (nombre, coste)
+        const target = this.players[1 - i];
+        const stealable = [];
+        // Charles (0)
+        if (this.player1Index === 0 || this.player2Index === 0) { /* not used */ }
+        // construir según target character
+        const targetCharIndex = (1 - i) === 0 ? this.player1Index : this.player2Index;
+        if (targetCharIndex === 0) { // Charles
+            stealable.push({ id: 'charSpecial', cost: 150 });
+            stealable.push({ id: 'charTransform', cost: 300 });
+            stealable.push({ id: 'charExplosion', cost: 180 });
+        } else if (targetCharIndex === 1) { // Sofía
+            stealable.push({ id: 'sofiaLaser', cost: 100 });
+            stealable.push({ id: 'sofiaTeleport', cost: 100 });
+            stealable.push({ id: 'sofiaMeteor', cost: 250 });
+        } else if (targetCharIndex === 2) { // Franchesca
+            stealable.push({ id: 'franEnergy', cost: 100 });
+            stealable.push({ id: 'franJump', cost: 250 });
+            // do not include steal to avoid recursion
+        } else {
+            // por defecto, dejar alguna habilidad genérica
+            stealable.push({ id: 'genericHit', cost: 100 });
+        }
+
+        // Secuencia R,R,X -> roba la habilidad (sin laser)
+        if (
+            player.franchescaLaserBuffer.length === 3 &&
+            player.franchescaLaserBuffer[0].k === "R" &&
+            player.franchescaLaserBuffer[1].k === "R" &&
+            player.franchescaLaserBuffer[2].k === "X"
+        ) {
+            // Si el objetivo está bloqueando, no roba
+            if (target.blocking) {
+                this.cameras.main.flash(120, 80, 80, 80);
+            } else {
+                // seleccionar habilidad aleatoria del objetivo
+                const choice = stealable[Math.floor(Math.random() * stealable.length)];
+                if (choice) {
+                    player.energy = Math.max(0, player.energy - 300);
+                    // asignar habilidad al ladrón por 30s
+                    player.franchescaStolenAbility = { name: choice.id, cost: choice.cost, source: (1 - i), timer: time + 30000 };
+                    player.franchescaStolenTimer = player.franchescaStolenAbility.timer;
+                    // marcar en el objetivo que perdió esa habilidad (solo esa)
+                    target.stolenAbilities = target.stolenAbilities || {};
+                    target.stolenAbilitiesTimers = target.stolenAbilitiesTimers || {};
+                    target.stolenAbilities[choice.id] = true;
+                    target.stolenAbilitiesTimers[choice.id] = time + 30000;
+
+                    // feedback visual
+                    if (target.sprite && target.sprite.setTint) target.sprite.setTint(0x444444);
+                    if (player.sprite && player.sprite.setTint) player.sprite.setTint(0xffcc88);
+                    this.cameras.main.flash(140, 255, 200, 50);
+                }
+            }
+            player.franchescaLaserBuffer = [];
+        }
+    }
+
+    // NUEVO handler que permite al ladrón usar la habilidad robada con L,L,X
+    handleFranchescaUseStolen(i, time) {
+        const player = this.players[i];
+        if (!player || !player.franchescaStolenAbility) return;
+        const sprite = player.sprite;
+        const ability = player.franchescaStolenAbility;
+        const pad = getPad(player.padIndex, this);
+
+        // Input buffer L,L,X
+        let input = null;
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX < -0.7 && !pad._franUseLeft) { input = "L"; pad._franUseLeft = true; }
+            if (axisX > -0.7 && axisX < 0.7) pad._franUseLeft = false;
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._franUseHit) { input = "X"; pad._franUseHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._franUseHit = false;
+        }
+
+        if (input) {
+            const now = time;
+            if (player.franchescaUseBuffer.length === 0 || (now - (player.franchescaUseBuffer[player.franchescaUseBuffer.length - 1].t)) < 1000) {
+                player.franchescaUseBuffer.push({ k: input, t: now });
+                if (player.franchescaUseBuffer.length > 3) player.franchescaUseBuffer.shift();
+            } else {
+                player.franchescaUseBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        if (
+            player.franchescaUseBuffer.length === 3 &&
+            player.franchescaUseBuffer[0].k === "L" &&
+            player.franchescaUseBuffer[1].k === "L" &&
+            player.franchescaUseBuffer[2].k === "X"
+        ) {
+            // usar la habilidad robada (sin consumirla; la misma puede usarse dentro del tiempo)
+            if (player.energy < ability.cost) {
+                // not enough energy: feedback
+                this.cameras.main.flash(120, 80, 80, 80);
+            } else {
+                const target = this.players[1 - i];
+                // ejecutar efectos según ability.name
+                switch (ability.name) {
+                    case 'sofiaLaser':
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        if (!target.blocking) {
+                            target.health = Math.max(0, target.health - 10);
+                            // atraer
+                            const offset = 60;
+                            target.sprite.x = sprite.x + (target.sprite.x < sprite.x ? -offset : offset);
+                            target.sprite.y = sprite.y;
+                            target.sprite.setVelocity(0, 0);
+                        }
+                        break;
+                    case 'sofiaTeleport':
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        // teleport thief near target and damage
+                        {
+                            const offset = 60;
+                            sprite.x = target.sprite.x + (sprite.x < target.sprite.x ? -offset : offset);
+                            sprite.y = target.sprite.y;
+                            sprite.setVelocity(0, 0);
+                            if (!target.blocking) target.health = Math.max(0, target.health - 30);
+                        }
+                        break;
+                    case 'sofiaMeteor':
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        {
+                            const meteor = this.add.circle(target.sprite.x, target.sprite.y - 400, 38, 0xff3300).setDepth(10);
+                            this.tweens.add({
+                                targets: meteor,
+                                y: target.sprite.y,
+                                duration: 500,
+                                ease: 'Quad.easeIn',
+                                onComplete: () => {
+                                    if (!target.blocking) {
+                                        target.health = Math.max(0, target.health - 150);
+                                        target.sprite.setVelocityY(-500);
+                                    }
+                                    this.cameras.main.shake(200, 0.03);
+                                    meteor.destroy();
+                                }
+                            });
+                        }
+                        break;
+                    case 'charSpecial':
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        if (!target.blocking) {
+                            target.health = Math.max(0, target.health - 65);
+                            const dir = (target.sprite.x > sprite.x) ? 1 : -1;
+                            target.sprite.setVelocity(600 * dir, -120);
+                        }
+                        break;
+                    case 'charTransform':
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        player.transformed = true;
+                        player.transformTimer = time + 8000;
+                        break;
+                    case 'charExplosion':
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        if (!target.blocking) {
+                            target.health = Math.max(0, target.health - 90);
+                            target.sprite.setVelocityY(-400);
+                        } else {
+                            target.health = Math.max(0, target.health - 30);
+                            target.sprite.setVelocityY(-120);
+                        }
+                        break;
+                    case 'franEnergy':
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        if (!target.blocking) target.health = Math.max(0, target.health - 15);
+                        break;
+                    case 'franJump':
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        if (!target.blocking) target.health = Math.max(0, target.health - 250);
+                        break;
+                    default:
+                        // generic fallback
+                        player.energy = Math.max(0, player.energy - ability.cost);
+                        if (!target.blocking) target.health = Math.max(0, target.health - Math.floor(ability.cost / 2));
+                        break;
+                }
+            }
+            // limpiar buffer de uso
+            player.franchescaUseBuffer = [];
         }
     }
 }
