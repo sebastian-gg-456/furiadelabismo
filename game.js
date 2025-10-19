@@ -836,8 +836,9 @@ class GameScene extends Phaser.Scene {
         this.handleFranchescaSteal(i, time);
         // Permitir usar habilidad robada (L,L,X) si existe
         this.handleFranchescaUseStolen(i, time);
-        // Habilidad de Mario
+        // Habilidades de Mario
         this.handleMarioBeam(i, time);
+        this.handleMarioExplosion(i, time);
     }
 
     spawnProjectile(i) {
@@ -1951,6 +1952,100 @@ class GameScene extends Phaser.Scene {
 
             // Limpiar buffer
             player.marioBeamBuffer = [];
+        }
+    }
+
+    handleMarioExplosion(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Mario es índice 3 en el selector de personajes
+        if ((i === 0 && this.player1Index !== 3) || (i === 1 && this.player2Index !== 3)) return;
+
+        if (!player.marioExplBuffer) player.marioExplBuffer = [];
+        if (player.energy < 150) { player.marioExplBuffer = []; return; }
+
+        // detectar input (R, L, X)
+        let input = null;
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._marioExplRight) { input = "R"; pad._marioExplRight = true; }
+            if (axisX < -0.7 && !pad._marioExplLeft) { input = "L"; pad._marioExplLeft = true; }
+            if (axisX > -0.7 && axisX < 0.7) pad._marioExplRight = pad._marioExplLeft = false;
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._marioExplHit) { input = "X"; pad._marioExplHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._marioExplHit = false;
+        }
+
+        if (input) {
+            const now = time;
+            if (player.marioExplBuffer.length === 0 || (now - (player.marioExplBuffer[player.marioExplBuffer.length - 1].t)) < 1000) {
+                player.marioExplBuffer.push({ k: input, t: now });
+                if (player.marioExplBuffer.length > 3) player.marioExplBuffer.shift();
+            } else {
+                player.marioExplBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // secuencia R, L, X
+        if (
+            player.marioExplBuffer.length === 3 &&
+            player.marioExplBuffer[0].k === "R" &&
+            player.marioExplBuffer[1].k === "L" &&
+            player.marioExplBuffer[2].k === "X"
+        ) {
+            // consumir energía
+            player.energy = Math.max(0, player.energy - 150);
+
+            const RADIUS = 200;
+            const DAMAGE = 80;
+
+            // visual y feedback
+            const explCircle = this.add.circle(sprite.x, sprite.y, RADIUS, 0xff8844, 0.22).setDepth(9);
+            this.cameras.main.shake(180, 0.02);
+            this.cameras.main.flash(100, 255, 200, 160);
+
+            // aplicar efecto a todos los enemigos (atraviesa)
+            for (let j = 0; j < this.players.length; j++) {
+                if (j === i) continue;
+                const target = this.players[j];
+                if (!target || !target.sprite) continue;
+                const d = Phaser.Math.Distance.Between(sprite.x, sprite.y, target.sprite.x, target.sprite.y);
+                if (d <= RADIUS) {
+                    // empujar lejos (normalizado)
+                    const nx = (target.sprite.x - sprite.x) / Math.max(1, d);
+                    const ny = (target.sprite.y - sprite.y) / Math.max(1, d);
+                    // fuerza proporcional (más cerca => más empuje)
+                    const pushStrength = 300 + (1 - (d / RADIUS)) * 300; // aprox 300..600
+                    target.sprite.setVelocity(nx * pushStrength, -200);
+
+                    // daño (reduce si bloquea)
+                    if (!target.blocking) {
+                        target.health = Math.max(0, target.health - DAMAGE);
+                    } else {
+                        target.health = Math.max(0, target.health - Math.floor(DAMAGE * 0.35));
+                    }
+
+                    // stun corto
+                    target.beingHit = true;
+                    target.hitTimer = this.time.now + 400;
+                }
+            }
+
+            // eliminar visual rápido
+            this.time.delayedCall(400, () => { if (explCircle && explCircle.scene) explCircle.destroy(); });
+
+            // limpiar buffer
+            player.marioExplBuffer = [];
         }
     }
 }
