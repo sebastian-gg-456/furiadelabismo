@@ -456,7 +456,7 @@ class MapSelector extends Phaser.Scene {
             const x = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
             if (x < -0.6 && !pad._leftPressed) { this.changeMap(-1); pad._leftPressed = true; }
             else if (x > 0.6 && !pad._rightPressed) { this.changeMap(1); pad._rightPressed = true; }
-            else if (x > -0.6 && x < 0.6) pad._leftPressed = pad._rightPressed = false;
+            else if (x > -0.6 && x < 0.6) { pad._leftPressed = pad._rightPressed = false; }
 
             const a = pad.buttons[0] && pad.buttons[0].pressed;
             if (a && !pad._aPressed) { this.startGame(); pad._aPressed = true; }
@@ -632,6 +632,9 @@ class GameScene extends Phaser.Scene {
 
         // small camera shake on hit
         this.cameras.main.setBackgroundColor(0x001122);
+
+        // Reiniciar flag de fin de combate cada vez que se crea la escena
+        this.matchEnded = false;
     }
 
     onProjectileHit(proj, hitPlayerIndex) {
@@ -694,6 +697,26 @@ class GameScene extends Phaser.Scene {
         this.hpBars[1].width = Math.max(0, (this.players[1].health / maxHP) * barLength);
         this.enBars[0].width = Math.max(0, (this.players[0].energy / maxEN) * barLength);
         this.enBars[1].width = Math.max(0, (this.players[1].energy / maxEN) * barLength);
+
+        // Comprobar fin de combate: si algún jugador llega a 0 HP termina el match
+        if (!this.matchEnded) {
+            const p0Dead = this.players[0].health <= 0;
+            const p1Dead = this.players[1].health <= 0;
+            if (p0Dead || p1Dead) {
+                this.matchEnded = true;
+                const winnerPlayerIndex = p0Dead ? 1 : 0;
+                const winnerCharIndex = (winnerPlayerIndex === 0) ? this.player1Index : this.player2Index;
+                this.scene.start('GameOver', {
+                    winnerPlayerIndex,
+                    winnerCharIndex,
+                    player1Index: this.player1Index,
+                    player2Index: this.player2Index,
+                    mode: this.mode,
+                    map: this.selectedMap
+                });
+                return; // dejar de procesar este update
+            }
+        }
 
         this.projectiles.children.iterate(proj => {
             if (!proj) return;
@@ -1402,7 +1425,7 @@ class GameScene extends Phaser.Scene {
         else punchHeld = this.keysP2.hit.isDown;
         // Gamepad
         const pad = getPad(player.padIndex, this);
-        if (pad && pad.connected && pad.buttons[2]) punchHeld = punchHeld || pad.buttons[2].pressed;
+        if ( pad && pad.connected && pad.buttons[2]) punchHeld = punchHeld || pad.buttons[2].pressed;
 
         // Si la habilidad está activa, aplica daño constante y consume energía
         if (player.franchescaEnergyActive) {
@@ -2047,6 +2070,52 @@ class GameScene extends Phaser.Scene {
             // limpiar buffer
             player.marioExplBuffer = [];
         }
+    }
+}
+// --- ESCENA GAME OVER ---
+class GameOver extends Phaser.Scene {
+    constructor() { super("GameOver"); }
+    init(data) { this.dataIn = data || {}; }
+    create() {
+        const { width, height } = this.scale;
+        this.cameras.main.setBackgroundColor(0x000011);
+
+        const charNames = ["Charles", "Sofia", "Franchesca", "Mario"];
+        const winnerCharIndex = this.dataIn.winnerCharIndex ?? 0;
+        const winnerName = charNames[winnerCharIndex] || ("Jugador " + ((this.dataIn.winnerPlayerIndex ?? 0) + 1));
+
+        // Título ganador
+        this.add.text(width / 2, 120, `GANA: ${winnerName}`, { font: "48px Arial", color: "#ffd966" }).setOrigin(0.5);
+
+        // Botones
+        const btnW = 380, btnH = 64, gap = 18;
+        const baseY = height / 2;
+
+        // Selección de personaje
+        const charBtn = this.add.rectangle(width / 2, baseY - (btnH + gap), btnW, btnH, 0x004466).setInteractive();
+        this.add.text(width / 2, baseY - (btnH + gap), "SELECCIÓN DE PERSONAJE", { font: "22px Arial", color: "#00ffff" }).setOrigin(0.5);
+        charBtn.on('pointerdown', () => this.scene.start("CharacterSelector", { mode: this.dataIn.mode || "versus" }));
+
+        // Menú principal
+        const menuBtn = this.add.rectangle(width / 2, baseY, btnW, btnH, 0x003355).setInteractive();
+        this.add.text(width / 2, baseY, "MENÚ PRINCIPAL", { font: "22px Arial", color: "#ffffff" }).setOrigin(0.5);
+        menuBtn.on('pointerdown', () => this.scene.start("Menu"));
+
+        // Reintentar
+        const retryBtn = this.add.rectangle(width / 2, baseY + (btnH + gap), btnW, btnH, 0x002244).setInteractive();
+        this.add.text(width / 2, baseY + (btnH + gap), "REINTENTAR", { font: "22px Arial", color: "#66ffff" }).setOrigin(0.5);
+        retryBtn.on('pointerdown', () => {
+            this.scene.start("GameScene", {
+                player1Index: this.dataIn.player1Index ?? 0,
+                player2Index: this.dataIn.player2Index ?? 1,
+                mode: this.dataIn.mode ?? "versus",
+                map: this.dataIn.map ?? "Mapa 1"
+            });
+        });
+
+        // Soporte teclado: ENTER confirma el primer botón (selección), ESC va al menú
+        this.input.keyboard.on('keydown-ESC', () => this.scene.start("Menu"));
+        this.input.keyboard.on('keydown-ENTER', () => this.scene.start("CharacterSelector", { mode: this.dataIn.mode || "versus" }));
     }
 }
 
