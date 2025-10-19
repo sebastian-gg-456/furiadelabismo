@@ -635,29 +635,35 @@ class GameScene extends Phaser.Scene {
     }
 
     onProjectileHit(proj, hitPlayerIndex) {
-        console.log("onProjectileHit", proj, hitPlayerIndex, proj.texture ? proj.texture.key : "no texture");
-        if (!proj.active || !proj.texture || proj.texture.key !== 'tex_bullet') return;
+        // soporte para proyectiles variados; usa proj.damage / proj.piercing
+        if (!proj || !proj.active || !proj.texture) return;
+        const key = proj.texture.key;
+        if (key !== 'tex_bullet') return; // si luego agregas tex_fire o similares, agrega aquí
         const shooter = proj.shooter;
         if (shooter === hitPlayerIndex) return;
         const target = this.players[hitPlayerIndex];
+        if (!target) { if (!proj.piercing) proj.destroy(); return; }
+
+        const damage = (proj.damage != null) ? proj.damage : 20;
         if (!target.blocking) {
-            target.health = Math.max(0, target.health - 20);
-            // Stun por disparo
+            target.health = Math.max(0, target.health - damage);
             target.beingHit = true;
-            target.hitTimer = this.time.now + 300; // 300ms de stun por disparo
+            target.hitTimer = this.time.now + 300;
+        } else {
+            // daño reducido al bloquear
+            target.health = Math.max(0, target.health - Math.floor(damage * 0.35));
         }
-        proj.destroy();
+
+        if (!proj.piercing) proj.destroy();
     }
 
     handleProjectilePlayerOverlap(a, b, hitPlayerIndex) {
         // Detecta cuál es la bala y cuál el jugador
-        let proj, playerSprite;
-        if (a.texture && a.texture.key === 'tex_bullet') {
+        let proj;
+        if (a && a.texture && a.texture.key === 'tex_bullet') {
             proj = a;
-            playerSprite = b;
-        } else if (b.texture && b.texture.key === 'tex_bullet') {
+        } else if (b && b.texture && b.texture.key === 'tex_bullet') {
             proj = b;
-            playerSprite = a;
         } else {
             return; // Ninguno es proyectil, no hacer nada
         }
@@ -830,6 +836,8 @@ class GameScene extends Phaser.Scene {
         this.handleFranchescaSteal(i, time);
         // Permitir usar habilidad robada (L,L,X) si existe
         this.handleFranchescaUseStolen(i, time);
+        // Habilidad de Mario
+        this.handleMarioBeam(i, time);
     }
 
     spawnProjectile(i) {
@@ -1407,7 +1415,7 @@ class GameScene extends Phaser.Scene {
                 // SOLO daña si el enemigo NO está bloqueando
                 if (dist <= 200 && !target.blocking) {
                     const dt = this.game.loop.delta / 1000;
-                    target.health = Math.max(0, target.health - 15 * dt);
+                    target.health = Math.max(0, target.health -   15 * dt);
                 }
                 // Efecto visual: círculo de energía
                 if (!player._energyCircle || !player._energyCircle.scene) {
@@ -1811,6 +1819,138 @@ class GameScene extends Phaser.Scene {
             }
             // limpiar buffer de uso
             player.franchescaUseBuffer = [];
+        }
+    }
+
+    // NUEVA: Habilidad de Mario - rayo atravesador (IZQ, DER, GOLPE) - ahora láser instantáneo
+    handleMarioBeam(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Mario es índice 3 en el selector de personajes
+        if ((i === 0 && this.player1Index !== 3) || (i === 1 && this.player2Index !== 3)) return;
+
+        if (!player.marioBeamBuffer) player.marioBeamBuffer = [];
+        if (player.energy < 150) { player.marioBeamBuffer = []; return; }
+
+        let input = null;
+        // Teclado
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.left)) input = "L";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+
+        // Gamepad
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX < -0.7 && !pad._marioLeft) { input = "L"; pad._marioLeft = true; }
+            if (axisX > 0.7 && !pad._marioRight) { input = "R"; pad._marioRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) pad._marioLeft = pad._marioRight = false;
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._marioHit) { input = "X"; pad._marioHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._marioHit = false;
+        }
+
+        if (input) {
+            const now = time;
+            if (player.marioBeamBuffer.length === 0 || (now - (player.marioBeamBuffer[player.marioBeamBuffer.length - 1].t)) < 1000) {
+                player.marioBeamBuffer.push({ k: input, t: now });
+                if (player.marioBeamBuffer.length > 3) player.marioBeamBuffer.shift();
+            } else {
+                player.marioBeamBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verifica la secuencia L,R,X
+        if (
+            player.marioBeamBuffer.length === 3 &&
+            player.marioBeamBuffer[0].k === "L" &&
+            player.marioBeamBuffer[1].k === "R" &&
+            player.marioBeamBuffer[2].k === "X"
+        ) {
+            // Gasta energía
+            player.energy = Math.max(0, player.energy - 150);
+
+            // origen del láser
+            const sx = sprite.x;
+            const sy = sprite.y - 10;
+
+            // direccional: hacia el enemigo actual (pero se extiende mucho para atravesar)
+            const target = this.players[1 - i];
+            const dx = (target.sprite.x - sx);
+            const dy = (target.sprite.y - sy);
+            const len = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+            const nx = dx / len;
+            const ny = dy / len;
+
+            // extremo lejano del láser
+            const EXT = 2000;
+            const ex = sx + nx * EXT;
+            const ey = sy + ny * EXT;
+
+            // dibuja línea láser (visual)
+            const laser = this.add.line(0, 0, sx, sy, ex, ey, 0xffcc00).setOrigin(0, 0);
+            try { laser.setLineWidth(8); } catch(e){} // no-crash si no disponible
+            laser.setDepth(50);
+
+            // helper: distancia punto - segmento
+            const pointLineDist = (px, py, x1, y1, x2, y2) => {
+                const A = px - x1;
+                const B = py - y1;
+                const C = x2 - x1;
+                const D = y2 - y1;
+                const dot = A * C + B * D;
+                const len_sq = C * C + D * D;
+                const t = Math.max(0, Math.min(1, len_sq === 0 ? 0 : dot / len_sq));
+                const projx = x1 + t * C;
+                const projy = y1 + t * D;
+                const dx2 = px - projx;
+                const dy2 = py - projy;
+                return Math.sqrt(dx2 * dx2 + dy2 * dy2);
+            };
+
+            // daño base y umbral de colisión al láser
+            const baseDamage = 100;
+            const hitThreshold = 40; // px de ancho efectivo
+
+            // Aplica efecto a todos los jugadores excepto el que dispara (atraviesa)
+            for (let j = 0; j < this.players.length; j++) {
+                if (!this.players[j] || !this.players[j].sprite) continue;
+                if (j === i) continue; // no pegarse a sí mismo
+
+                const pSprite = this.players[j].sprite;
+                const distToLine = pointLineDist(pSprite.x, pSprite.y, sx, sy, ex, ey);
+                if (distToLine <= hitThreshold) {
+                    // Está alcanzado por el láser
+                    if (!this.players[j].blocking) {
+                        this.players[j].health = Math.max(0, this.players[j].health - baseDamage);
+                    } else {
+                        // si bloquea, daño reducido (misma lógica que proyectiles)
+                        this.players[j].health = Math.max(0, this.players[j].health - Math.floor(baseDamage * 0.35));
+                    }
+                    // stun corto
+                    this.players[j].beingHit = true;
+                    this.players[j].hitTimer = this.time.now + 300;
+                    // un pequeño empuje opcional si no bloquea
+                    if (!this.players[j].blocking) {
+                        const pushDir = (this.players[j].sprite.x > sprite.x) ? 1 : -1;
+                        this.players[j].sprite.setVelocityX(180 * pushDir);
+                    } else {
+                        this.players[j].sprite.setVelocityX(0);
+                    }
+                }
+            }
+
+            // cámara y feedback visual
+            this.cameras.main.flash(120, 255, 200, 80);
+            this.time.delayedCall(160, () => { if (laser && laser.scene) laser.destroy(); });
+
+            // Limpiar buffer
+            player.marioBeamBuffer = [];
         }
     }
 }
