@@ -1281,17 +1281,19 @@ class GameScene extends Phaser.Scene {
             }
 
             if (this.anims.exists(animKey)) {
-                // For punch/shoot we want to force visibility during the locked window
+                // If punch/shoot is locked (we just triggered it), restart the anim so its full frames play
                 if ((action === 'punch' || action === 'shoot') && player.actionLockUntil && time < player.actionLockUntil) {
-                    // play the animation but don't restart if already playing
-                    try { sprite.anims.play(animKey, true); } catch (e) { /* ignore */ }
+                    try { sprite.anims.play(animKey, false); } catch (e) { /* ignore */ }
                 } else {
-                    // For loopable actions (walk, block, charge) don't restart if already playing
+                    // Normal behavior: don't restart if already playing
                     try { sprite.anims.play(animKey, true); } catch (e) { /* ignore */ }
                 }
             } else {
-                // If no animation exists, try to show a static frame (prefer frame 0)
-                try { sprite.setFrame(0); } catch (e) { /* ignore */ }
+                // If no animation exists, try to show an action frame
+                try {
+                    if (action === 'punch' || action === 'shoot') sprite.setFrame(1);
+                    else sprite.setFrame(0);
+                } catch (e) { /* ignore if frames missing */ }
             }
         }
 
