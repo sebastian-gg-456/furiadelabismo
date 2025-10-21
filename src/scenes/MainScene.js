@@ -64,20 +64,20 @@ export class MainScene extends Scene {
         });
 
         // This event comes from MenuScene
-        this.game.events.on("start-game", () => {
+        this._onStartGame = this._onStartGame || (() => {
             this.scene.stop("MenuScene");
             this.scene.launch("HudScene", { remaining_time: this.game_over_timeout });
             this.player.start();
             this.enemy_blue.start();
 
             // Game Over timeout
-            this.time.addEvent({
+            this._gameOverTimer = this.time.addEvent({
                 delay: 1000,
                 loop: true,
                 callback: () => {
                     if (this.game_over_timeout === 0) {
-                        // You need remove the event listener to avoid duplicate events.
-                        this.game.events.removeListener("start-game");
+                        // Remove the event listener safely to avoid duplicate events.
+                        try { if (this.game && this.game.events && this._onStartGame) this.game.events.off("start-game", this._onStartGame); } catch (e) {}
                         // It is necessary to stop the scenes launched in parallel.
                         this.scene.stop("HudScene");
                         this.scene.start("GameOverScene", { points: this.points });
@@ -88,6 +88,7 @@ export class MainScene extends Scene {
                 }
             });
         });
+        if (this.game && this.game.events) this.game.events.on("start-game", this._onStartGame);
     }
 
     update() {

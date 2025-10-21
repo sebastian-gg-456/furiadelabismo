@@ -15,6 +15,135 @@ function getPad(idx, scene) {
 // --- ESCENAS ---
 // ========================
 
+// --- ESCENA PRELOADER ---
+class Preloader extends Phaser.Scene {
+    constructor() { super("Preloader"); }
+    preload() {
+        // Carga de assets para personajes (4 repos)
+        this.load.setPath('assets/player');
+
+        const mapping = {
+            repo1: {
+                walk: 'repo1/caminar-derecha.png', idle: 'repo1/mirar-derecha.png', shoot: 'repo1/disparo-derecha.png',
+                punch: 'repo1/golpe-derecha.png', punch_fire: 'repo1/golpe-fuego-derecha.png', kick: 'repo1/patada-derecha.png',
+                block: 'repo1/bloqueo-derecha.png', charge: 'repo1/carga-energia-derecha.png',
+                hurt: 'repo1/caminar-herido-derecha.png', jump: 'repo1/salto-derecha.png'
+            },
+            repo2: {
+                walk: 'repo2/caminar2-derecha.png', idle: 'repo2/mirar2-derecha.png', shoot: 'repo2/disparo2-derecha.png',
+                punch: 'repo2/golpe2-derecha.png', block: 'repo2/bloqueo2-derecha.png', charge: 'repo2/carga-energia2-derecha.png',
+                hurt: 'repo2/caminar2-herido-derecha.png', jump: 'repo2/salto2-derecha1.png'
+            },
+            repo3: {
+                walk: 'repo3/caminar3-derecha.png', idle: 'repo3/mirar3-derecha.png', shoot: 'repo3/disparo3-derecha.png',
+                punch: 'repo3/golpe3-derecha.png', robo: 'repo3/robo3-derecha.png', block: 'repo3/bloqueo3-derecha.png', charge: 'repo3/carga3-energia-derecha.png',
+                hurt: 'repo3/caminar3-herido-derecha.png', jump: 'repo3/salto3-derecha.png'
+            },
+            repo4: {
+                walk: 'repo4/caminar4-derecha.png', idle: 'repo4/mirar4-derecha.png', shoot: 'repo4/disparo4-derecha.png',
+                block: 'repo4/bloqueo4-derecha.png', charge: 'repo4/carga4-energia-derecha.png',
+                hurt: 'repo4/caminar4-herido-derecha.png', jump: 'repo4/salto4-derecha.png'
+            }
+        };
+
+        // Cargar todos los assets de personajes como spritesheet de 64x64.
+        // El comportamiento esperado: la mayoría de acciones tendrán 2 frames (idle/move/shot),
+        // y golpes/patadas tendrán 3 frames. Cargamos todo como spritesheet para simplificar.
+        Object.keys(mapping).forEach((repoKey, idx) => {
+            const charIndex = idx; // 0..3
+            const m = mapping[repoKey];
+            for (const action in m) {
+                const key = `char${charIndex}_${action}`;
+                this.load.spritesheet(key, m[action], { frameWidth: 64, frameHeight: 64 });
+            }
+        });
+        // Guardar mapping para recargas posteriores
+        this._mapping = mapping;
+
+    // Cargar imagen del mapa 1 desde public/mapas (servida en la raíz)
+    // Nota: coloca tu archivo en public/mapas/mapa1.png
+    // Intentamos la ruta relativa primero (mapas/mapa1.png). Si falla, reintentamos con la ruta absoluta '/mapas/mapa1.png'.
+    this._map1Retry = false;
+    this.load.image('map1', 'mapas/mapa1.png');
+    this.load.on('loaderror', (file) => {
+        try {
+            if (file && file.key === 'map1' && !this._map1Retry) {
+                console.warn('map1 failed to load (relative), retrying with absolute path');
+                this._map1Retry = true;
+                this.load.image('map1', '/mapas/mapa1.png');
+                this.load.start();
+            }
+        } catch (e) { /* ignore */ }
+    }, this);
+
+        // Otros assets
+        this.load.setPath('assets');
+        // background.png no existe en este proyecto, omitimos para evitar errores
+        // this.load.image('background', 'background.png');
+        this.load.image('floor', 'floor.png');
+        this.load.setPath('assets/player');
+        this.load.image('bullet', 'bullet.png');
+        this.load.image('tex_bullet', 'bullet.png');
+    }
+
+    
+    create() {
+        // Las cargas ya se hicieron como spritesheet para acciones multi-frame.
+        // Creamos las animaciones y continuamos al menú.
+        this.createAnimations();
+        this.scene.start('Menu');
+    }
+
+    createAnimations() {
+        // Crear animaciones globales por personaje (misma lógica que antes)
+        for (let i = 0; i < 4; i++) {
+            const actions = ['walk', 'idle', 'shoot', 'punch', 'block', 'charge', 'hurt', 'jump','punch_fire','kick','robo'];
+            actions.forEach(act => {
+                const key = `char${i}_${act}`;
+                if (!this.textures.exists(key)) return; // evita errores si falta
+                const tex = this.textures.get(key);
+                let frames = [{ key }];
+
+                // desired frame counts per action
+                // Default: 2 frames (1..2) for most actions; punches/kicks: 3 frames.
+                let desiredCount = 2;
+                if (act === 'punch' || act === 'punch_fire' || act === 'kick') desiredCount = 3;
+                if (act === 'robo') desiredCount = 2;
+
+                try {
+                    if (desiredCount > 1 && this.textures.exists(key) && tex.frameTotal && tex.frameTotal > 1) {
+                        // Explicitly use the first desiredCount frames (0..desiredCount-1)
+                        const maxAvailable = Math.max(0, tex.frameTotal - 1);
+                        const endFrame = Math.min(maxAvailable, Math.max(0, desiredCount - 1));
+                        frames = this.anims.generateFrameNumbers(key, { start: 0, end: endFrame });
+                    } else {
+                        // Single-frame: show frame 0 only
+                        frames = [{ key, frame: 0 }];
+                    }
+                } catch (e) {
+                    frames = [{ key, frame: 0 }];
+                }
+
+                let frameRate = 12;
+                if (act === 'walk') frameRate = 6;
+                else if (act === 'idle') frameRate = 6;
+                else if (act === 'punch' || act === 'shoot' || act === 'punch_fire' || act === 'kick') frameRate = 4; // slow attacks
+
+                const repeat = (act === 'punch' || act === 'shoot' || act === 'jump' || act === 'punch_fire' || act === 'kick' || act === 'robo') ? 0 : -1;
+
+                this.anims.create({ key: `${key}`, frames: frames, frameRate: frameRate, repeat: repeat });
+                // Debug log: report frames available and animation parameters
+                try {
+                    const total = tex && tex.frameTotal ? tex.frameTotal : (tex && tex.frames ? Object.keys(tex.frames).length : 1);
+                    const usedFrames = Array.isArray(frames) ? frames.length : 0;
+                    console.log(`ANIM CREATED: ${key} desired=${desiredCount} available=${total} used=${usedFrames} fr=${frameRate} rep=${repeat}`);
+                } catch (e) { /* ignore logging errors */ }
+            });
+        }
+    }
+}
+
+
 // --- ESCENA MENU ---
 class Menu extends Phaser.Scene {
    
@@ -262,6 +391,20 @@ class CharacterSelector extends Phaser.Scene {
 
         this.characters.forEach((char, i) => {
             const box = this.add.rectangle(startX, centerY, rectWidth, rectHeight, char.color).setStrokeStyle(2, 0x000000).setInteractive();
+            const spriteKey = `char${i}_idle`;
+            // add character preview sprite (centered a bit above)
+            let preview = null;
+            if (this.textures.exists(spriteKey)) {
+                preview = this.add.sprite(startX, centerY - 20, spriteKey);
+                // force display size to 64x64 for preview thumbnails
+                preview.setDisplaySize(64, 64);
+                // if the texture has multiple frames, show only the first frame for preview
+                if (this.anims.exists(spriteKey)) {
+                    try { preview.setFrame(0); } catch (e) { /* ignore if frame setting fails */ }
+                }
+            } else {
+                preview = this.add.rectangle(startX, centerY - 20, rectWidth - 40, rectHeight - 120, char.color).setStrokeStyle(1, 0x000000);
+            }
             this.add.text(startX, centerY + rectHeight / 2 + 25, char.name, { font: "22px Arial", color: "#00ffff" }).setOrigin(0.5);
             // click assigns to player1 by default and unconfirms player1 (so they must confirm again)
             box.on('pointerdown', (ptr) => {
@@ -270,6 +413,8 @@ class CharacterSelector extends Phaser.Scene {
                 this.updateSelectors();
             });
             this.characterRects.push(box);
+            // store preview sprite so we can follow selection
+            box.preview = preview;
             startX += rectWidth + spacing;
         });
 
@@ -456,7 +601,7 @@ class MapSelector extends Phaser.Scene {
             const x = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
             if (x < -0.6 && !pad._leftPressed) { this.changeMap(-1); pad._leftPressed = true; }
             else if (x > 0.6 && !pad._rightPressed) { this.changeMap(1); pad._rightPressed = true; }
-            else if (x > -0.6 && x < 0.6) { pad._leftPressed = pad._rightPressed = false; }
+            else if (x > -0.6 && x < 0.6) pad._leftPressed = pad._rightPressed = false;
 
             const a = pad.buttons[0] && pad.buttons[0].pressed;
             if (a && !pad._aPressed) { this.startGame(); pad._aPressed = true; }
@@ -489,32 +634,249 @@ class GameScene extends Phaser.Scene {
         this.selectedMap = data.map ?? "Mapa 1";
     }
 
+    // Create invisible platforms/ground for a given map name
+    createMapPlatforms(mapName, width, height) {
+        // Instead of creating bodies directly here, store platform data and build from it.
+        if (!this._platformData) this._platformData = [];
+        this._platformData.length = 0; // clear
+
+        if (mapName === 'Mapa 1') {
+            // Create a slight slope by splitting the ground into two segments with different Y
+
+            // Left ground (a bit higher) - nudged slightly down for better fit
+            this._platformData.push({ x: Math.round(width * 0.20), y: Math.round(height * 0.890), w: Math.round(width * 0.56), h: 40 });
+            // Right ground (a bit lower) to create inclination (keep as-is)
+            this._platformData.push({ x: Math.round(width * 0.72), y: Math.round(height * 0.92), w: Math.round(width * 0.56), h: 40 });
+
+            // Platforms near the left player: slight adjustments
+            // left-most near player (a bit lower than before)
+            this._platformData.push({ x: Math.round(width * 0.15), y: Math.round(height * 0.65), w: 160, h: 24 });
+            // platform above player: it was too high, move it down a bit (closer to ground)
+            this._platformData.push({ x: Math.round(width * 0.32), y: Math.round(height * 0.48), w: 160, h: 24 });
+
+            // Middle platform: move a bit to the left and keep it short
+            this._platformData.push({ x: Math.round(width * 0.58), y: Math.round(height * 0.850), w: 580, h: 90 });
+
+            // New small platform between the two players: higher than the red one but below the top flying platforms
+            this._platformData.push({ x: Math.round(width * 0.56), y: Math.round(height * 0.50), w: 120, h: 24 });
+
+            // Note: removed the far-right platform and the boat internal platform as requested
+        } else {
+            this._platformData.push({ x: Math.round(width / 2), y: Math.round(height - 30), w: Math.round(width), h: 40 });
+        }
+
+        // Build the actual game objects from the data
+        this.buildPlatformsFromData();
+    }
+
+    // Create static bodies and visuals from this._platformData
+    buildPlatformsFromData() {
+        // destroy previous groundGroup if present
+        if (this.groundGroup) {
+            try {
+                this.groundGroup.clear(true, true);
+            } catch (e) { /* ignore */ }
+        }
+        this.groundGroup = this.physics.add.staticGroup();
+        this._platformObjects = [];
+
+        if (!this._platformData) this._platformData = [];
+
+        this._platformData.forEach((pd, idx) => {
+            const rect = this.add.rectangle(pd.x, pd.y, pd.w, pd.h, 0x000000, 0).setOrigin(0.5);
+            this.physics.add.existing(rect, true);
+            this.groundGroup.add(rect);
+            this._platformObjects.push({ gobj: rect, data: pd });
+        });
+
+        // refresh player colliders if players exist
+        try {
+            if (this._playerColliders && this._playerColliders.length) {
+                this._playerColliders.forEach(c => { try { this.physics.world.removeCollider(c); } catch (e) {} });
+            }
+            this._playerColliders = [];
+            if (this.players && this.players[0] && this.players[0].sprite) this._playerColliders.push(this.physics.add.collider(this.players[0].sprite, this.groundGroup));
+            if (this.players && this.players[1] && this.players[1].sprite) this._playerColliders.push(this.physics.add.collider(this.players[1].sprite, this.groundGroup));
+        } catch (e) { /* ignore collider refresh errors */ }
+
+        // If debug overlay is active, redraw
+        if (this._debugMode) this.drawPlatformDebug();
+    }
+
     create() {
         const { width, height } = this.scale;
-        // Generar texturas simples (rects) para evitar depender de assets
-        const g = this.make.graphics({ x: 0, y: 0, add: false });
-        g.fillStyle(0x00ffff, 1); g.fillRect(0, 0, 48, 96); g.generateTexture('tex_p1', 48, 96); g.clear();
-        g.fillStyle(0xff0066, 1); g.fillRect(0, 0, 48, 96); g.generateTexture('tex_p2', 48, 96); g.clear();
-        g.fillStyle(0x333333, 1); g.fillRect(0, 0, 200, 20); g.generateTexture('tex_ground', 200, 20); g.clear();
-        g.fillStyle(0xffff00, 1); g.fillRect(0, 0, 12, 6); g.generateTexture('tex_bullet', 12, 6); g.clear();
-
-
-
         // Fullscreen on start
         this.scale.startFullscreen();
 
-        // Ground
-        this.ground = this.physics.add.staticImage(width / 2, height - 30, 'tex_ground').setScale(width / 200, 1).refreshBody();
+        // Background map image (if selected) - always try to show it: if not loaded, load it at runtime
+        if (this.selectedMap === 'Mapa 1') {
+            const addBgIfReady = (key = 'map1') => {
+                if (!this.textures.exists(key)) return false;
+                const bg = this.add.image(0, 0, key);
+                // store reference so we can nudge it live
+                this._bgImage = bg;
+                if (this._bgYOffset === undefined) this._bgYOffset = 48; // default nudge down so art sits correctly
+                // Prefer a cover-style scale (no distortion) so the image fills the screen.
+                // Then bottom-align the image so ground/art lines up with the bottom of the viewport.
+                try {
+                    const imgW = bg.width || bg.texture ? bg.texture.source[0].width : null;
+                    const imgH = bg.height || bg.texture ? bg.texture.source[0].height : null;
+                    // Phaser stores textures differently depending on load path; fallback if unavailable
+                    const texture = this.textures.get(key);
+                    const source = texture && texture.source && texture.source[0] ? texture.source[0] : null;
+                    const realW = (imgW && imgW > 0) ? imgW : (source ? source.width : null);
+                    const realH = (imgH && imgH > 0) ? imgH : (source ? source.height : null);
+
+                    if (realW && realH) {
+                        const scale = Math.max(width / realW, height / realH); // cover
+                        bg.setScale(scale);
+                        // bottom-center origin so the bottom of the image matches the bottom of the viewport
+                        bg.setOrigin(0.5, 1);
+                        bg.x = width / 2;
+                        bg.y = height + (this._bgYOffset || 0); // bottom aligned with offset
+                    } else {
+                        // fallback: fill the viewport (may stretch)
+                        bg.setDisplaySize(width, height);
+                        bg.setOrigin(0.5, 0.5);
+                        bg.x = width / 2; bg.y = height / 2 + (this._bgYOffset || 0);
+                    }
+                } catch (e) {
+                    // final fallback: stretch to fit
+                    try { bg.setDisplaySize(width, height); bg.setOrigin(0.5, 0.5); bg.x = width / 2; bg.y = height / 2; } catch (ee) { /* ignore */ }
+                }
+                bg.setScrollFactor(0).setDepth(-10);
+                return true;
+            };
+
+            // If texture already exists (preloaded), add immediately
+            if (!addBgIfReady('map1')) {
+                // Try to load map1 at runtime. We'll attempt relative path first, then absolute on one retry.
+                this._map1InGameRetry = false;
+                // once the file finishes loading, add the background
+                this.load.once('filecomplete-image-map1', () => { addBgIfReady('map1'); }, this);
+                // handle load errors: retry once with absolute path
+                this.load.once('loaderror', (file) => {
+                    try {
+                        if (file && file.key === 'map1' && !this._map1InGameRetry) {
+                            this._map1InGameRetry = true;
+                            this.load.image('map1', '/mapas/mapa1.png');
+                            // ensure we add when this second attempt completes
+                            this.load.once('filecomplete-image-map1', () => { addBgIfReady('map1'); }, this);
+                            this.load.start();
+                        }
+                    } catch (e) { /* ignore */ }
+                }, this);
+                // start the loader for the first attempt
+                this.load.image('map1', 'mapas/mapa1.png');
+                this.load.start();
+            }
+        }
+
+        // Debug controls: allow nudging background vertically with [ and ] keys
+        // show current offset on screen
+        this.input.keyboard.on('keydown-OPEN_BRACKET', () => {
+            this._bgYOffset = (this._bgYOffset || 0) - 8;
+            if (this._bgImage) this._bgImage.y = this._bgImage.y - 8;
+            if (this._bgOffsetText) this._bgOffsetText.setText(`bg offset: ${this._bgYOffset}`);
+        });
+        this.input.keyboard.on('keydown-CLOSE_BRACKET', () => {
+            this._bgYOffset = (this._bgYOffset || 0) + 8;
+            if (this._bgImage) this._bgImage.y = this._bgImage.y + 8;
+            if (this._bgOffsetText) this._bgOffsetText.setText(`bg offset: ${this._bgYOffset}`);
+        });
+        // fallback key names for some browsers
+        this.input.keyboard.on('keydown-[', () => { this.input.keyboard.emit('keydown-OPEN_BRACKET'); });
+        this.input.keyboard.on('keydown-]', () => { this.input.keyboard.emit('keydown-CLOSE_BRACKET'); });
+
+        this._bgOffsetText = this.add.text(10, 10, `bg offset: ${this._bgYOffset || 0}`, { font: '16px Arial', color: '#ffffff' }).setDepth(1000).setScrollFactor(0);
+
+        // Platform debug tools
+        this._debugMode = false;
+        this._selectedPlatformIndex = 0;
+        this._platformDebugGroup = this.add.group();
+
+        // Toggle debug overlay (D)
+        this.input.keyboard.on('keydown-D', () => {
+            this._debugMode = !this._debugMode;
+            if (this._debugMode) this.drawPlatformDebug();
+            else this.clearPlatformDebug();
+        });
+
+        // Cycle selected platform (TAB)
+        this.input.keyboard.on('keydown-TAB', (e) => {
+            e.preventDefault && e.preventDefault();
+            if (!this._platformData || this._platformData.length === 0) return;
+            this._selectedPlatformIndex = (this._selectedPlatformIndex + 1) % this._platformData.length;
+            if (this._debugMode) this.drawPlatformDebug();
+        });
+
+        // Nudge selected platform with arrows
+        const nudge = (dx, dy, big) => {
+            if (!this._platformData || this._platformData.length === 0) return;
+            const step = big ? 8 : 1;
+            const pd = this._platformData[this._selectedPlatformIndex];
+            pd.x += dx * step; pd.y += dy * step;
+            this.buildPlatformsFromData();
+        };
+
+        this.input.keyboard.on('keydown-LEFT', (e) => { nudge(-1, 0, e.shiftKey); });
+        this.input.keyboard.on('keydown-RIGHT', (e) => { nudge(1, 0, e.shiftKey); });
+        this.input.keyboard.on('keydown-UP', (e) => { nudge(0, -1, e.shiftKey); });
+        this.input.keyboard.on('keydown-DOWN', (e) => { nudge(0, 1, e.shiftKey); });
+
+        // Save/Load layout (S / L)
+        this.input.keyboard.on('keydown-S', () => { try { localStorage.setItem('fda_platforms_map1', JSON.stringify(this._platformData)); console.log('platforms saved'); } catch (e) {} });
+        this.input.keyboard.on('keydown-L', () => { try { const v = localStorage.getItem('fda_platforms_map1'); if (v) { this._platformData = JSON.parse(v); this.buildPlatformsFromData(); console.log('platforms loaded'); } } catch (e) {} });
+
+        // helper to draw debug overlays
+        this.drawPlatformDebug = () => {
+            this.clearPlatformDebug();
+            if (!this._platformData) return;
+            this._platformData.forEach((pd, i) => {
+                const g = this.add.rectangle(pd.x, pd.y, pd.w, pd.h, (i === this._selectedPlatformIndex) ? 0xff0000 : 0x00ff00, 0.25).setOrigin(0.5).setDepth(900).setScrollFactor(0);
+                this._platformDebugGroup.add(g);
+            });
+            // update small info text
+            if (this._platformInfoText) this._platformInfoText.destroy();
+            this._platformInfoText = this.add.text(10, 28, `platform ${this._selectedPlatformIndex}/${this._platformData.length - 1}`, { font: '14px Arial', color: '#ffffff' }).setDepth(1000).setScrollFactor(0);
+        };
+
+        this.clearPlatformDebug = () => {
+            try { this._platformDebugGroup.clear(true, true); } catch (e) {}
+            if (this._platformInfoText) { try { this._platformInfoText.destroy(); } catch (e) {} this._platformInfoText = null; }
+        };
+
+        // Create invisible ground and platforms depending on selected map
+        this.groundGroup = this.physics.add.staticGroup();
+        this.createMapPlatforms(this.selectedMap, width, height);
+
+        // Show platforms briefly at start so the designer can see placement, then hide
+        try {
+            // draw overlays for 5 seconds, unless user toggles debug manually
+            this.drawPlatformDebug();
+            this.time.delayedCall(5000, () => { if (!this._debugMode) this.clearPlatformDebug(); }, [], this);
+        } catch (e) { /* ignore if debug helpers not ready */ }
 
         // Players array with state
         this.players = [];
 
-        const p1Sprite = this.physics.add.sprite(200, height - 150, 'tex_p1').setCollideWorldBounds(true);
-        const p2Sprite = this.physics.add.sprite(width - 200, height - 150, 'tex_p2').setCollideWorldBounds(true);
+    // Create character sprites based on selected indices (player1Index, player2Index)
+    const p1KeyBase = `char${this.player1Index}_idle`;
+    const p2KeyBase = `char${this.player2Index}_idle`;
+    const p1Sprite = this.physics.add.sprite(200, height - 150, p1KeyBase).setCollideWorldBounds(true);
+    const p2Sprite = this.physics.add.sprite(width - 200, height - 150, p2KeyBase).setCollideWorldBounds(true);
 
         [p1Sprite, p2Sprite].forEach(s => {
             s.setBounce(0.05);
-            s.body.setSize(40, 88);
+            // force display size to 64x64 (sprites are 64x64 tiles)
+            try { s.setDisplaySize(64, 64); } catch (e) { /* ignore if not supported */ }
+            // adjust body size for 64x64 frames
+            if (s.body && s.body.setSize) s.body.setSize(40, 56).setOffset(12, 8);
+            // start idle animation if exists - play the anim only if it's intended to animate; otherwise show first frame
+            const animKey = `${s.texture.key}`;
+            // Do NOT autoplay the idle animation on spawn. Show the first frame only.
+            // Animations will be started by the update loop when input/actions occur.
+            try { s.setFrame(0); } catch (e) { /* ignore */ }
         });
 
         // Cambios: vida 1000, energía 500, contador de golpes y flag de daño
@@ -547,6 +909,7 @@ class GameScene extends Phaser.Scene {
             franchescaStolenTimer: 0,
             stolenAbilities: {},                  // { abilityName: true }
             stolenAbilitiesTimers: {},            // { abilityName: timestamp }
+           
             franchescaUseBuffer: []               // buffer para usar habilidad robada (L,L,X)
         });
 
@@ -583,8 +946,9 @@ class GameScene extends Phaser.Scene {
         });
 
         // Colliders
-        this.physics.add.collider(this.players[0].sprite, this.ground);
-        this.physics.add.collider(this.players[1].sprite, this.ground);
+    // Colliders: players with groundGroup (invisible platforms)
+    this.physics.add.collider(this.players[0].sprite, this.groundGroup);
+    this.physics.add.collider(this.players[1].sprite, this.groundGroup);
 
         // Projectiles group
         this.projectiles = this.physics.add.group();
@@ -630,11 +994,8 @@ class GameScene extends Phaser.Scene {
             pad._lastButtons = [];
         });
 
-        // small camera shake on hit
-        this.cameras.main.setBackgroundColor(0x001122);
-
-        // Reiniciar flag de fin de combate cada vez que se crea la escena
-        this.matchEnded = false;
+    // small camera shake on hit
+    // background color removed to allow map background to show
     }
 
     onProjectileHit(proj, hitPlayerIndex) {
@@ -698,26 +1059,6 @@ class GameScene extends Phaser.Scene {
         this.enBars[0].width = Math.max(0, (this.players[0].energy / maxEN) * barLength);
         this.enBars[1].width = Math.max(0, (this.players[1].energy / maxEN) * barLength);
 
-        // Comprobar fin de combate: si algún jugador llega a 0 HP termina el match
-        if (!this.matchEnded) {
-            const p0Dead = this.players[0].health <= 0;
-            const p1Dead = this.players[1].health <= 0;
-            if (p0Dead || p1Dead) {
-                this.matchEnded = true;
-                const winnerPlayerIndex = p0Dead ? 1 : 0;
-                const winnerCharIndex = (winnerPlayerIndex === 0) ? this.player1Index : this.player2Index;
-                this.scene.start('GameOver', {
-                    winnerPlayerIndex,
-                    winnerCharIndex,
-                    player1Index: this.player1Index,
-                    player2Index: this.player2Index,
-                    mode: this.mode,
-                    map: this.selectedMap
-                });
-                return; // dejar de procesar este update
-            }
-        }
-
         this.projectiles.children.iterate(proj => {
             if (!proj) return;
             if (proj.x < -50 || proj.x > this.scale.width + 50) proj.destroy();
@@ -757,11 +1098,21 @@ class GameScene extends Phaser.Scene {
         const sprite = player.sprite;
         if (!sprite || !sprite.body) return;
 
-        // Si está siendo golpeado, no puede moverse, saltar, pegar ni disparar
+        // Character index for animation keys
+        const charIndex = (i === 0) ? this.player1Index : this.player2Index;
+
+        // Si está siendo golpeado, reproducir animación de 'hurt' y no permitir acciones
         if (player.beingHit) {
             sprite.setVelocityX(0);
             sprite.setTint(0xff4444); // Color de daño
+            const hurtKey = `char${charIndex}_hurt`;
+            if (this.anims.exists(hurtKey) && sprite.anims.currentAnim?.key !== hurtKey) {
+                sprite.play(hurtKey, false);
+            }
             return;
+        } else {
+            // limpiar tint cuando no está siendo golpeado
+            if (sprite.clearTint) sprite.clearTint();
         }
 
         const pad = getPad(player.padIndex, this);
@@ -805,39 +1156,64 @@ class GameScene extends Phaser.Scene {
         const chargeDistance = 140; // Si está a más de 140px, puede cargar
 
         if (blockOrCharge) {
+            const charIndexLocal = charIndex;
             if (dist > chargeDistance) {
                 // Cargar energía (lejos)
                 player.blocking = false;
                 sprite.setTint(0x2222cc); // Color para cargar
                 player.energy = Math.min(500, player.energy + 2.0); // Carga más rápida
+                // intentar usar la textura específica de carga y mostrar frame 1
+                const chargeKey = `char${charIndexLocal}_charge`;
+                if (this.textures.exists(chargeKey)) {
+                    try { sprite.setTexture(chargeKey); sprite.setFrame(1); } catch (e) { /* ignore */ }
+                } else {
+                    try { if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop(); sprite.setFrame(1); } catch (e) { /* ignore if no frame 1 */ }
+                }
             } else {
                 // Bloquear (cerca)
                 player.blocking = true;
                 sprite.setTint(0x336633); // Color para bloquear
+                // intentar usar la textura específica de bloqueo y mostrar frame 1
+                const blockKey = `char${charIndexLocal}_block`;
+                if (this.textures.exists(blockKey)) {
+                    try { sprite.setTexture(blockKey); sprite.setFrame(1); } catch (e) { /* ignore */ }
+                } else {
+                    try { if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop(); sprite.setFrame(1); } catch (e) { /* ignore if no frame 1 */ }
+                }
             }
             // No puede moverse, saltar, disparar ni pegar
             sprite.setVelocityX(0);
             return;
         } else {
             player.blocking = false;
+            // restaurar tint y textura/ frame por defecto
             sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
+            const idleKey = `char${charIndex}_idle`;
+            if (this.textures.exists(idleKey)) {
+                try { sprite.setTexture(idleKey); sprite.setFrame(0); } catch (e) { /* ignore */ }
+            } else {
+                try { sprite.setFrame(0); } catch (e) { /* ignore */ }
+            }
         }
 
-        // Movimiento solo si NO está bloqueando/cargando
+    // Movimiento solo si NO está bloqueando/cargando
         const speed = 220;
         if (left) { sprite.setVelocityX(-speed); sprite.flipX = true; }
         else if (right) { sprite.setVelocityX(speed); sprite.flipX = false; }
         else { sprite.setVelocityX(0); }
 
-        // Saltar
+    // Saltar
         if (up && sprite.body.onFloor()) sprite.setVelocityY(-560);
 
-        // Pequeña recarga pasiva
+    // Pequeña recarga pasiva
         player.energy = Math.min(500, player.energy + 0.05);
 
         // Puñetazo: 50 de daño
         if (punch && (time - player.lastPunch) > player.punchCD) {
             player.lastPunch = time;
+            // lock punch animation visibility for 450ms so it's noticeable
+            player._lockedAction = 'punch';
+            player.actionLockUntil = time + 450;
             this.doPunch(i);
         }
 
@@ -845,7 +1221,59 @@ class GameScene extends Phaser.Scene {
         if (shoot && (time - player.lastShot) > player.shotCD && player.energy >= 100) {
             player.lastShot = time;
             player.energy = Math.max(0, player.energy - 100);
+            // lock shoot animation visibility for 600ms so it's noticeable
+            player._lockedAction = 'shoot';
+            player.actionLockUntil = time + 600;
             this.spawnProjectile(i);
+        }
+
+        // Animations: determine current action and play appropriate animation
+    // Character index mapping (the chosen character index is in this.player1Index/2Index)
+    let action = 'idle';
+        if (player.blocking) action = 'block';
+        else if (shoot) action = 'shoot';
+        else if (punch) action = 'punch';
+        else if (left || right) action = 'walk';
+        else if (up && !sprite.body.onFloor()) action = 'jump';
+        // Build anim key
+        // If an action was locked (punch/shoot), respect it until timeout
+        if (player.actionLockUntil && time < player.actionLockUntil) {
+            action = player._lockedAction || action;
+        } else {
+            player._lockedAction = null;
+            player.actionLockUntil = 0;
+        }
+
+        const animKey = `char${charIndex}_${action}`;
+
+        // Idle should be static: show first frame only instead of looping animation
+        if (action === 'idle') {
+            if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop();
+            const idleKey = `char${charIndex}_idle`;
+            if (this.textures.exists(idleKey)) {
+                try { sprite.setTexture(idleKey); sprite.setFrame(0); } catch (e) { /* ignore */ }
+            } else {
+                try { sprite.setFrame(0); } catch (e) { /* ignore if frame not present */ }
+            }
+        } else {
+            // Force texture to the action key if available (covers single-frame and spritesheet cases)
+            if (this.textures.exists(animKey)) {
+                try { sprite.setTexture(animKey); } catch (e) { /* ignore */ }
+            }
+
+            if (this.anims.exists(animKey)) {
+                // For punch/shoot we want to force visibility during the locked window
+                if ((action === 'punch' || action === 'shoot') && player.actionLockUntil && time < player.actionLockUntil) {
+                    // play the animation but don't restart if already playing
+                    try { sprite.anims.play(animKey, true); } catch (e) { /* ignore */ }
+                } else {
+                    // For loopable actions (walk, block, charge) don't restart if already playing
+                    try { sprite.anims.play(animKey, true); } catch (e) { /* ignore */ }
+                }
+            } else {
+                // If no animation exists, try to show a static frame (prefer frame 0)
+                try { sprite.setFrame(0); } catch (e) { /* ignore */ }
+            }
         }
 
         this.handleCharlesSpecial(i, time);
@@ -859,6 +1287,7 @@ class GameScene extends Phaser.Scene {
         this.handleFranchescaSteal(i, time);
         // Permitir usar habilidad robada (L,L,X) si existe
         this.handleFranchescaUseStolen(i, time);
+        
         // Habilidades de Mario
         this.handleMarioBeam(i, time);
         this.handleMarioExplosion(i, time);
@@ -871,8 +1300,17 @@ class GameScene extends Phaser.Scene {
         const sx = shooter.sprite.x + (shooter.sprite.flipX ? -30 : 30);
         const sy = shooter.sprite.y - 10;
 
-        const proj = this.physics.add.sprite(sx, sy, 'tex_bullet');
+    const proj = this.physics.add.sprite(sx, sy, this.textures.exists('tex_bullet') ? 'tex_bullet' : 'tex_bullet');
         proj.shooter = i;
+
+        // Ensure shoot animation plays immediately for feedback
+        const shooterChar = (i === 0) ? this.player1Index : this.player2Index;
+        const shootKey = `char${shooterChar}_shoot`;
+        if (this.anims.exists(shootKey)) {
+            try { shooter.sprite.anims.play(shootKey, true); } catch (e) { }
+        } else if (this.textures.exists(shootKey)) {
+            try { shooter.sprite.setTexture(shootKey); shooter.sprite.setFrame(0); } catch (e) { }
+        }
 
         this.projectiles.add(proj);
         proj.body.setAllowGravity(false);
@@ -926,6 +1364,14 @@ class GameScene extends Phaser.Scene {
             target.hitTimer = this.time.now + 400;
             const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
             attacker.sprite.setVelocityX(120 * dir);
+            // Play punch animation immediately
+            const attChar = (i === 0) ? this.player1Index : this.player2Index;
+            const atkPunchKey = `char${attChar}_punch`;
+            if (this.anims.exists(atkPunchKey)) {
+                try { attacker.sprite.anims.play(atkPunchKey, true); } catch (e) { }
+            } else if (this.textures.exists(atkPunchKey)) {
+                try { attacker.sprite.setTexture(atkPunchKey); attacker.sprite.setFrame(0); } catch (e) { }
+            }
         }
     }
 
@@ -1093,6 +1539,14 @@ class GameScene extends Phaser.Scene {
             player.transformed = true;
             player.transformTimer = time + 8000; // Dura 8 segundos (ajusta si quieres)
             player.transformBuffer = [];
+            // reproducir animación especial golpe-fuego si existe
+            const charIdx = (i === 0) ? this.player1Index : this.player2Index;
+            const key = `char${charIdx}_punch_fire`;
+            if (this.anims.exists(key)) {
+                try { sprite.anims.play(key, false); } catch (e) { /* ignore */ }
+            } else if (this.textures.exists(key)) {
+                try { sprite.setTexture(key); sprite.setFrame(0); } catch (e) { }
+            }
         }
     }
 
@@ -1165,6 +1619,14 @@ class GameScene extends Phaser.Scene {
             player.explosionPending = true;
             player.explosionTimer = time + 1500; // 1.5 segundos después
             player.explosionBuffer = [];
+            // reproducir animación de patada en Charles (kick)
+            const charIdx2 = (i === 0) ? this.player1Index : this.player2Index;
+            const kickKey = `char${charIdx2}_kick`;
+            if (this.anims.exists(kickKey)) {
+                try { sprite.anims.play(kickKey, false); } catch (e) { }
+            } else if (this.textures.exists(kickKey)) {
+                try { sprite.setTexture(kickKey); sprite.setFrame(0); } catch (e) { }
+            }
         }
     }
 
@@ -1410,6 +1872,29 @@ class GameScene extends Phaser.Scene {
             player.sofiaMeteorBuffer = [];
         }
     }
+        
+
+        handleSofiaRobo(i, time) {
+            const player = this.players[i];
+            const sprite = player.sprite;
+            if ((i === 0 && this.player1Index !== 1) || (i === 1 && this.player2Index !== 1)) return;
+            // check two buffers: laser and teleport sequences to detect L,L,X or R,R,X
+            let roboTriggered = false;
+        function check(buf) { return buf && buf.length === 3 && ((buf[0].k === 'L' && buf[1].k === 'L' && buf[2].k === 'X') || (buf[0].k === 'R' && buf[1].k === 'R' && buf[2].k === 'X')); }
+        if (check(player.sofiaLaserBuffer) || check(player.sofiaTeleportBuffer) || check(player.sofiaMeteorBuffer)) roboTriggered = true;
+            if (roboTriggered) {
+                const charIdx = (i === 0) ? this.player1Index : this.player2Index;
+                const roboKey = `char${charIdx}_robo`;
+                if (this.anims.exists(roboKey)) {
+                    try { sprite.anims.play(roboKey, false); } catch (e) { }
+                } else if (this.textures.exists(roboKey)) {
+                    try { sprite.setTexture(roboKey); sprite.setFrame(0); } catch (e) { }
+                }
+                // clear buffers
+                if (player.sofiaLaserBuffer) player.sofiaLaserBuffer = [];
+                if (player.sofiaTeleportBuffer) player.sofiaTeleportBuffer = [];
+            }
+        }
 
     handleFranchescaEnergy(i, time) {
         const player = this.players[i];
@@ -1425,7 +1910,7 @@ class GameScene extends Phaser.Scene {
         else punchHeld = this.keysP2.hit.isDown;
         // Gamepad
         const pad = getPad(player.padIndex, this);
-        if ( pad && pad.connected && pad.buttons[2]) punchHeld = punchHeld || pad.buttons[2].pressed;
+        if (pad && pad.connected && pad.buttons[2]) punchHeld = punchHeld || pad.buttons[2].pressed;
 
         // Si la habilidad está activa, aplica daño constante y consume energía
         if (player.franchescaEnergyActive) {
@@ -2070,52 +2555,6 @@ class GameScene extends Phaser.Scene {
             // limpiar buffer
             player.marioExplBuffer = [];
         }
-    }
-}
-// --- ESCENA GAME OVER ---
-class GameOver extends Phaser.Scene {
-    constructor() { super("GameOver"); }
-    init(data) { this.dataIn = data || {}; }
-    create() {
-        const { width, height } = this.scale;
-        this.cameras.main.setBackgroundColor(0x000011);
-
-        const charNames = ["Charles", "Sofia", "Franchesca", "Mario"];
-        const winnerCharIndex = this.dataIn.winnerCharIndex ?? 0;
-        const winnerName = charNames[winnerCharIndex] || ("Jugador " + ((this.dataIn.winnerPlayerIndex ?? 0) + 1));
-
-        // Título ganador
-        this.add.text(width / 2, 120, `GANA: ${winnerName}`, { font: "48px Arial", color: "#ffd966" }).setOrigin(0.5);
-
-        // Botones
-        const btnW = 380, btnH = 64, gap = 18;
-        const baseY = height / 2;
-
-        // Selección de personaje
-        const charBtn = this.add.rectangle(width / 2, baseY - (btnH + gap), btnW, btnH, 0x004466).setInteractive();
-        this.add.text(width / 2, baseY - (btnH + gap), "SELECCIÓN DE PERSONAJE", { font: "22px Arial", color: "#00ffff" }).setOrigin(0.5);
-        charBtn.on('pointerdown', () => this.scene.start("CharacterSelector", { mode: this.dataIn.mode || "versus" }));
-
-        // Menú principal
-        const menuBtn = this.add.rectangle(width / 2, baseY, btnW, btnH, 0x003355).setInteractive();
-        this.add.text(width / 2, baseY, "MENÚ PRINCIPAL", { font: "22px Arial", color: "#ffffff" }).setOrigin(0.5);
-        menuBtn.on('pointerdown', () => this.scene.start("Menu"));
-
-        // Reintentar
-        const retryBtn = this.add.rectangle(width / 2, baseY + (btnH + gap), btnW, btnH, 0x002244).setInteractive();
-        this.add.text(width / 2, baseY + (btnH + gap), "REINTENTAR", { font: "22px Arial", color: "#66ffff" }).setOrigin(0.5);
-        retryBtn.on('pointerdown', () => {
-            this.scene.start("GameScene", {
-                player1Index: this.dataIn.player1Index ?? 0,
-                player2Index: this.dataIn.player2Index ?? 1,
-                mode: this.dataIn.mode ?? "versus",
-                map: this.dataIn.map ?? "Mapa 1"
-            });
-        });
-
-        // Soporte teclado: ENTER confirma el primer botón (selección), ESC va al menú
-        this.input.keyboard.on('keydown-ESC', () => this.scene.start("Menu"));
-        this.input.keyboard.on('keydown-ENTER', () => this.scene.start("CharacterSelector", { mode: this.dataIn.mode || "versus" }));
     }
 }
 
