@@ -1306,9 +1306,10 @@ class GameScene extends Phaser.Scene {
         // Permitir usar habilidad robada (L,L,X) si existe
         this.handleFranchescaUseStolen(i, time);
         
-        // Habilidades de Mario
-        this.handleMarioBeam(i, time);
-        this.handleMarioExplosion(i, time);
+    // Habilidades de Mario
+    this.handleMarioBeam(i, time);
+    this.handleMarioSmash(i, time);
+    this.handleMarioExplosion(i, time);
     }
 
     spawnProjectile(i) {
@@ -2572,6 +2573,101 @@ class GameScene extends Phaser.Scene {
 
             // limpiar buffer
             player.marioExplBuffer = [];
+        }
+    }
+
+    // NUEVA: Habilidad de Mario - smash gigante (DER, DER, GOLPE)
+    handleMarioSmash(i, time) {
+        const player = this.players[i];
+        const sprite = player.sprite;
+        // Mario es índice 3 en el selector de personajes
+        if ((i === 0 && this.player1Index !== 3) || (i === 1 && this.player2Index !== 3)) return;
+
+        if (!player.marioSmashBuffer) player.marioSmashBuffer = [];
+        if (player.energy < 250) { player.marioSmashBuffer = []; return; }
+
+        // Detect input
+        let input = null;
+        if (i === 0) {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) input = "X";
+        } else {
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.right)) input = "R";
+            if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) input = "X";
+        }
+
+        const pad = getPad(player.padIndex, this);
+        if (pad && pad.connected) {
+            const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (axisX > 0.7 && !pad._marioSmashRight) { input = "R"; pad._marioSmashRight = true; }
+            if (axisX > -0.7 && axisX < 0.7) pad._marioSmashRight = false;
+            if (pad.buttons[2] && pad.buttons[2].pressed && !pad._marioSmashHit) { input = "X"; pad._marioSmashHit = true; }
+            if (!(pad.buttons[2] && pad.buttons[2].pressed)) pad._marioSmashHit = false;
+        }
+
+        if (input) {
+            const now = time;
+            if (player.marioSmashBuffer.length === 0 || (now - (player.marioSmashBuffer[player.marioSmashBuffer.length - 1].t)) < 1000) {
+                player.marioSmashBuffer.push({ k: input, t: now });
+                if (player.marioSmashBuffer.length > 3) player.marioSmashBuffer.shift();
+            } else {
+                player.marioSmashBuffer = [{ k: input, t: now }];
+            }
+        }
+
+        // Verifica la secuencia R, R, X
+        if (
+            player.marioSmashBuffer.length === 3 &&
+            player.marioSmashBuffer[0].k === "R" &&
+            player.marioSmashBuffer[1].k === "R" &&
+            player.marioSmashBuffer[2].k === "X"
+        ) {
+            // Consume energy
+            player.energy = Math.max(0, player.energy - 250);
+
+            // Objetivo: el enemigo opuesto
+            const target = this.players[1 - i];
+            if (!target || !target.sprite) { player.marioSmashBuffer = []; return; }
+
+            // Crear un rectángulo grande arriba del enemigo
+            const rectW = Math.min(600, this.scale.width - 40);
+            const rectH = 120; // altura del rectángulo que cae
+            const rectX = target.sprite.x;
+            const rectStartY = target.sprite.y - 600; // empieza bien arriba
+
+            const smash = this.add.rectangle(rectX, rectStartY, rectW, rectH, 0xff4444).setDepth(20).setOrigin(0.5, 0.5);
+
+            // Usar tween para que caiga
+            this.tweens.add({
+                targets: smash,
+                y: target.sprite.y,
+                duration: 500,
+                ease: 'Quad.easeIn',
+                onComplete: () => {
+                    // Impacto: aplicar daño 180 si no bloquea, o daño reducido si bloquea
+                    const DAMAGE = 180;
+                    if (!target.blocking) {
+                        target.health = Math.max(0, target.health - DAMAGE);
+                        target.sprite.setVelocityY(-420);
+                    } else {
+                        target.health = Math.max(0, target.health - Math.floor(DAMAGE * 0.35));
+                        target.sprite.setVelocityY(-120);
+                    }
+                    // Efecto de cámara
+                    this.cameras.main.shake(260, 0.04);
+                    this.cameras.main.flash(120, 255, 200, 140);
+
+                    // Pequeña explosión visual
+                    const hitFx = this.add.circle(target.sprite.x, target.sprite.y, 80, 0xffaa44, 0.6).setDepth(21);
+                    this.time.delayedCall(180, () => { if (hitFx && hitFx.scene) hitFx.destroy(); });
+
+                    // eliminar rect
+                    if (smash && smash.scene) smash.destroy();
+                }
+            });
+
+            // limpiar buffer
+            player.marioSmashBuffer = [];
         }
     }
 }
