@@ -1082,11 +1082,11 @@ class GameScene extends Phaser.Scene {
             if (!p) continue;
 
             // 1) Si este jugador tenía una habilidad robada (es ladrón), expirar su habilidad robada
-            if (p.franchescaStolenAbility && time > p.franchescaStolenAbility.timer) {
+                if (p.franchescaStolenAbility && time > p.franchescaStolenAbility.timer) {
                 p.franchescaStolenAbility = null;
                 p.franchescaStolenTimer = 0;
-                // opcional: feedback
-                if (p.sprite && p.sprite.setTint) p.sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
+                // opcional: feedback - restaurar colores originales
+                if (p.sprite && p.sprite.clearTint) p.sprite.clearTint();
                 this.cameras.main.flash(120, 200, 255, 200);
             }
 
@@ -1097,7 +1097,8 @@ class GameScene extends Phaser.Scene {
                     delete p.stolenAbilitiesTimers[abilityName];
                     // si ya no tiene habilidades robadas, restaurar tint
                     if (p.sprite && Object.keys(p.stolenAbilities).length === 0) {
-                        p.sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
+                        // Restaurar colores originales
+                        if (p.sprite.clearTint) p.sprite.clearTint();
                         this.cameras.main.flash(120, 255, 255, 255);
                     }
                 }
@@ -1202,10 +1203,10 @@ class GameScene extends Phaser.Scene {
             // No puede moverse, saltar, disparar ni pegar
             sprite.setVelocityX(0);
             return;
-        } else {
+            } else {
             player.blocking = false;
-            // restaurar tint y textura/ frame por defecto
-            sprite.setTint(i === 0 ? 0x00ffff : 0xff0066);
+            // restaurar colores originales y textura/frame por defecto
+            if (sprite.clearTint) sprite.clearTint();
             const idleKey = `char${charIndex}_idle`;
             if (this.textures.exists(idleKey)) {
                 try { sprite.setTexture(idleKey); sprite.setFrame(0); } catch (e) { /* ignore */ }
@@ -1499,9 +1500,9 @@ class GameScene extends Phaser.Scene {
         if (player.transformed) {
             sprite.setTint(0xffcc00); // Color de transformación
             player.blocking = false; // No puede bloquear
-            if (time > player.transformTimer) {
+                if (time > player.transformTimer) {
                 player.transformed = false;
-                sprite.setTint(i === 0 ? 0x00ffff : 0xff0066); // Color normal
+                if (sprite.clearTint) sprite.clearTint(); // Restaurar colores originales
             }
             return;
         }
@@ -2058,7 +2059,7 @@ class GameScene extends Phaser.Scene {
                     if (slashCircle && slashCircle.scene) slashCircle.destroy();
                 });
 
-                sprite.setTint(i === 0 ? 0x00ffff : 0xff0066); // Color normal
+                if (sprite.clearTint) sprite.clearTint(); // Restaurar colores originales
             }
             return;
         }
