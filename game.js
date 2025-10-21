@@ -176,9 +176,9 @@ class Menu extends Phaser.Scene {
         this.buttons.push({ rect: langButton, callback: () => { isEnglish = !isEnglish; this.updateTexts(); } });
 
         startY += buttonHeight + spacing;
-        const controlsButton = this.add.rectangle(width / 2, startY, buttonWidth, buttonHeight, 0x002244).setInteractive();
-        this.controlsText = this.add.text(width / 2, startY, isEnglish ? "CONTROLS" : "CONTROLES", { font: "28px Arial", color: "#66ffff" }).setOrigin(0.5);
-        this.buttons.push({ rect: controlsButton, callback: () => console.log(isEnglish ? "Show controls" : "Mostrar controles") });
+    const controlsButton = this.add.rectangle(width / 2, startY, buttonWidth, buttonHeight, 0x002244).setInteractive();
+    this.controlsText = this.add.text(width / 2, startY, isEnglish ? "CONTROLS" : "CONTROLES", { font: "28px Arial", color: "#66ffff" }).setOrigin(0.5);
+    this.buttons.push({ rect: controlsButton, callback: () => this.scene.start('ControlsScene') });
 
         // Marco selector
         this.selector = this.add.rectangle(this.buttons[this.selectedIndex].rect.x, this.buttons[this.selectedIndex].rect.y, buttonWidth + 10, buttonHeight + 10).setStrokeStyle(4, 0xffff00).setOrigin(0.5);
@@ -200,8 +200,7 @@ class Menu extends Phaser.Scene {
 
         // set up gamepad connect to init flags
         this.input.gamepad.on('connected', pad => {
-            pad._upPressed = pad._downPressed = false;
-            pad._aPressed = false;
+            pad._upPressed = pad._downPressed = pad._aPressed = pad._bPressed = false;
         });
     }
 
@@ -246,31 +245,65 @@ class ControlsScene extends Phaser.Scene {
     constructor() { super("ControlsScene"); }
     create() {
         const { width, height } = this.scale;
+    // Reset runtime flags so GameOver can be triggered repeatedly across matches
+    this._gameOverCooldownUntil = 0;
+        // Ensure background offset resets to default for a fresh layout
+        this._bgYOffset = 48;
+        if (this._bgOffsetText) { try { this._bgOffsetText.setText(`bg offset: ${this._bgYOffset}`); } catch (e) {} }
+        // If a leftover background image exists on this scene instance, destroy it to avoid duplicates
+        if (this._bgImage && this._bgImage.scene) {
+            try { this._bgImage.destroy(); } catch (e) {}
+            this._bgImage = null;
+        }
         this.cameras.main.setBackgroundColor(0x001d33);
 
-        const title = this.add.text(width / 2, 60, isEnglish ? "CONTROLS" : "CONTROLES", { font: "48px Arial", color: "#00ffff" }).setOrigin(0.5);
+        const title = this.add.text(40, 40, isEnglish ? "CONTROLS (GAMEPAD)" : "CONTROLES (MANDO)", { font: "36px Arial", color: "#00ffff" }).setOrigin(0, 0);
 
-        let y = 130;
+        let y = 100;
+        const leftX = 40;
         const line = (txt) => {
-            this.add.text(width / 2, y, txt, { font: "26px Arial", color: "#ffffff" }).setOrigin(0.5);
-            y += 38;
+            this.add.text(leftX, y, txt, { font: "22px Arial", color: "#ffffff", align: 'left' }).setOrigin(0, 0);
+            y += 32;
         };
 
-        // Controles básicos
-        line(isEnglish ? "Basic Controls" : "Controles básicos");
-        line(isEnglish ? "Move: A/D or LEFT/RIGHT" : "Moverse: A/D o IZQ/DERECHA");
-        line(isEnglish ? "Jump: W or UP" : "Saltar: W o ARRIBA");
-        line(isEnglish ? "Punch: X or K" : "Golpe: X o K");
-        line(isEnglish ? "Block/Charge: C or L" : "Bloquear/Cargar: C o L");
-        line(isEnglish ? "Shoot: B or P" : "Disparar: B o P");
-        y += 18;
+        // Gamepad-only controls (left aligned)
+        line(isEnglish ? "Move: Left stick (horizontal)" : "Mover: palanca izquierda (horizontal)");
+        line(isEnglish ? "Jump: Push left stick UP" : "Saltar: empujar palanca izquierda HACIA ARRIBA");
+        line(isEnglish ? "Punch: X button" : "Golpe: botón X");
+        line(isEnglish ? "Block/Charge: A button" : "Bloquear/Cargar: botón A");
+        line(isEnglish ? "Shoot: B button" : "Disparar: botón B");
+        y += 10;
 
-        // Habilidades
-        line(isEnglish ? "Special Abilities (all characters):" : "Habilidades especiales (todos los personajes):");
-        line(isEnglish ? "Ability 1: LEFT, RIGHT, PUNCH" : "Habilidad 1: IZQ, DER, GOLPE");
-        line(isEnglish ? "Ability 2: RIGHT, LEFT, PUNCH" : "Habilidad 2: DER, IZQ, GOLPE");
-        line(isEnglish ? "Ability 3: RIGHT, RIGHT, PUNCH" : "Habilidad 3: DER, DER, GOLPE");
-        y += 18;
+    // Special notes: Franchesca combos and all characters' abilities
+    line(isEnglish ? "Franchesca special (examples):" : "Franchesca - instrucciones especiales:");
+    line(isEnglish ? "Right, Right + Punch = Steal" : "Derecha, Derecha + Golpe = Robo (robar habilidad)");
+    line(isEnglish ? "Left, Left + Punch = Use stolen ability" : "Izquierda, Izquierda + Golpe = Usar habilidad robada");
+    y += 8;
+
+    // Abilities for each character
+    line(isEnglish ? "Charles - Abilities:" : "Charles - Habilidades:");
+    line(isEnglish ? "1) Left, Right + Punch: Quick dash hit" : "1) Izq, Der + Golpe: Embestida rápida");
+    line(isEnglish ? "2) Right, Left + Punch: Shield burst" : "2) Der, Izq + Golpe: Explosión de escudo");
+    line(isEnglish ? "3) Right, Right + Punch: Ground slam" : "3) Der, Der + Golpe: Golpe al suelo");
+    y += 6;
+
+    line(isEnglish ? "Sofia - Abilities:" : "Sofia - Habilidades:");
+    line(isEnglish ? "1) Left, Right + Punch: Swift shot" : "1) Izq, Der + Golpe: Disparo veloz");
+    line(isEnglish ? "2) Right, Left + Punch: Energy bubble" : "2) Der, Izq + Golpe: Burbuja energética");
+    line(isEnglish ? "3) Right, Right + Punch: Aerial flip" : "3) Der, Der + Golpe: Voltereta aérea");
+    y += 6;
+
+    line(isEnglish ? "Franchesca - Abilities:" : "Franchesca - Habilidades:");
+    line(isEnglish ? "1) Left, Right + Punch: Steal minor item" : "1) Izq, Der + Golpe: Robar ítem menor");
+    line(isEnglish ? "2) Right, Left + Punch: Quick vanish" : "2) Der, Izq + Golpe: Desvanecimiento rápido");
+    line(isEnglish ? "3) Right, Right + Punch: Steal major ability" : "3) Der, Der + Golpe: Robar habilidad mayor");
+    y += 6;
+
+    line(isEnglish ? "Mario - Abilities:" : "Mario - Habilidades:");
+    line(isEnglish ? "1) Left, Right + Punch: Fire dash" : "1) Izq, Der + Golpe: Carrera de fuego");
+    line(isEnglish ? "2) Right, Left + Punch: Power throw" : "2) Der, Izq + Golpe: Lanzamiento potente");
+    line(isEnglish ? "3) Right, Right + Punch: Spin upper" : "3) Der, Der + Golpe: Giro ascendente");
+    y += 12;
 
         // Botón para volver
         const backBtn = this.add.rectangle(width / 2, height - 70, 220, 60, 0x003355).setInteractive();
@@ -371,6 +404,22 @@ class CharacterSelector extends Phaser.Scene {
 
     create() {
         const { width, height } = this.scale;
+        // Ensure we are not in fullscreen mode when showing the GameOver UI.
+        // Some browsers/platforms keep the canvas scaled and that causes the map to be mispositioned when
+        // restarting while still in fullscreen. Force exit fullscreen here using Phaser and a document fallback.
+        try {
+            if (this.scale && this.scale.isFullscreen) this.scale.stopFullscreen();
+        } catch (e) { /* ignore */ }
+        // Fallback: try the DOM fullscreen API (some browsers don't properly toggle via Phaser)
+        try {
+            const doc = window.document;
+            if (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement) {
+                if (doc.exitFullscreen) doc.exitFullscreen();
+                else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+                else if (doc.mozCancelFullScreen) doc.mozCancelFullScreen();
+                else if (doc.msExitFullscreen) doc.msExitFullscreen();
+            }
+        } catch (e) { /* ignore */ }
         this.cameras.main.setBackgroundColor(0x001d33);
 
         this.characters = [
@@ -699,8 +748,7 @@ class GameScene extends Phaser.Scene {
             if (this.players && this.players[1] && this.players[1].sprite) this._playerColliders.push(this.physics.add.collider(this.players[1].sprite, this.groundGroup));
         } catch (e) { /* ignore collider refresh errors */ }
 
-        // If debug overlay is active, redraw
-        if (this._debugMode) this.drawPlatformDebug();
+    // If debug overlay is active, redraw (debug disabled in gameplay)
     }
 
     create() {
@@ -790,72 +838,16 @@ class GameScene extends Phaser.Scene {
 
         this._bgOffsetText = this.add.text(10, 10, `bg offset: ${this._bgYOffset || 0}`, { font: '16px Arial', color: '#ffffff' }).setDepth(1000).setScrollFactor(0);
 
-        // Platform debug tools
+        // Platform debug tools removed for gameplay stability
         this._debugMode = false;
         this._selectedPlatformIndex = 0;
-        this._platformDebugGroup = this.add.group();
-
-        // Toggle debug overlay (D)
-        this.input.keyboard.on('keydown-D', () => {
-            this._debugMode = !this._debugMode;
-            if (this._debugMode) this.drawPlatformDebug();
-            else this.clearPlatformDebug();
-        });
-
-        // Cycle selected platform (TAB)
-        this.input.keyboard.on('keydown-TAB', (e) => {
-            e.preventDefault && e.preventDefault();
-            if (!this._platformData || this._platformData.length === 0) return;
-            this._selectedPlatformIndex = (this._selectedPlatformIndex + 1) % this._platformData.length;
-            if (this._debugMode) this.drawPlatformDebug();
-        });
-
-        // Nudge selected platform with arrows
-        const nudge = (dx, dy, big) => {
-            if (!this._platformData || this._platformData.length === 0) return;
-            const step = big ? 8 : 1;
-            const pd = this._platformData[this._selectedPlatformIndex];
-            pd.x += dx * step; pd.y += dy * step;
-            this.buildPlatformsFromData();
-        };
-
-        this.input.keyboard.on('keydown-LEFT', (e) => { nudge(-1, 0, e.shiftKey); });
-        this.input.keyboard.on('keydown-RIGHT', (e) => { nudge(1, 0, e.shiftKey); });
-        this.input.keyboard.on('keydown-UP', (e) => { nudge(0, -1, e.shiftKey); });
-        this.input.keyboard.on('keydown-DOWN', (e) => { nudge(0, 1, e.shiftKey); });
-
-        // Save/Load layout (S / L)
-        this.input.keyboard.on('keydown-S', () => { try { localStorage.setItem('fda_platforms_map1', JSON.stringify(this._platformData)); console.log('platforms saved'); } catch (e) {} });
-        this.input.keyboard.on('keydown-L', () => { try { const v = localStorage.getItem('fda_platforms_map1'); if (v) { this._platformData = JSON.parse(v); this.buildPlatformsFromData(); console.log('platforms loaded'); } } catch (e) {} });
-
-        // helper to draw debug overlays
-        this.drawPlatformDebug = () => {
-            this.clearPlatformDebug();
-            if (!this._platformData) return;
-            this._platformData.forEach((pd, i) => {
-                const g = this.add.rectangle(pd.x, pd.y, pd.w, pd.h, (i === this._selectedPlatformIndex) ? 0xff0000 : 0x00ff00, 0.25).setOrigin(0.5).setDepth(900).setScrollFactor(0);
-                this._platformDebugGroup.add(g);
-            });
-            // update small info text
-            if (this._platformInfoText) this._platformInfoText.destroy();
-            this._platformInfoText = this.add.text(10, 28, `platform ${this._selectedPlatformIndex}/${this._platformData.length - 1}`, { font: '14px Arial', color: '#ffffff' }).setDepth(1000).setScrollFactor(0);
-        };
-
-        this.clearPlatformDebug = () => {
-            try { this._platformDebugGroup.clear(true, true); } catch (e) {}
-            if (this._platformInfoText) { try { this._platformInfoText.destroy(); } catch (e) {} this._platformInfoText = null; }
-        };
+        // NOTE: editing and visualizing platforms at runtime has been disabled.
 
         // Create invisible ground and platforms depending on selected map
         this.groundGroup = this.physics.add.staticGroup();
         this.createMapPlatforms(this.selectedMap, width, height);
 
-        // Show platforms briefly at start so the designer can see placement, then hide
-        try {
-            // draw overlays for 5 seconds, unless user toggles debug manually
-            this.drawPlatformDebug();
-            this.time.delayedCall(5000, () => { if (!this._debugMode) this.clearPlatformDebug(); }, [], this);
-        } catch (e) { /* ignore if debug helpers not ready */ }
+        // Platform debug showing removed to prevent accidental runtime edits during gameplay
 
         // Players array with state
         this.players = [];
@@ -1052,6 +1044,26 @@ class GameScene extends Phaser.Scene {
             this.updatePlayerInput(i, time);
         }
 
+        // Check for game over (any player's health reaches 0) with a short cooldown so it can fire every match
+        const now = time || this.time.now;
+        if (now > (this._gameOverCooldownUntil || 0)) {
+            if (this.players[0].health <= 0 || this.players[1].health <= 0) {
+                const loser = (this.players[0].health <= 0) ? 0 : 1;
+                const winner = 1 - loser;
+                // set cooldown 1s to avoid double-trigger
+                this._gameOverCooldownUntil = now + 1000;
+                // launch GameOver and stop this scene
+                this.scene.launch('GameOver', {
+                    winnerIndex: winner,
+                    winnerChar: (winner === 0) ? this.player1Index : this.player2Index,
+                    player1Index: this.player1Index,
+                    player2Index: this.player2Index,
+                    mode: this.mode
+                });
+                this.scene.stop();
+            }
+        }
+
         // Barras ajustadas a vida/energía máxima
         const maxHP = 1000, maxEN = 500, barLength = 400;
         this.hpBars[0].width = Math.max(0, (this.players[0].health / maxHP) * barLength);
@@ -1121,14 +1133,20 @@ class GameScene extends Phaser.Scene {
 
         if (pad && pad.connected) {
             const axisX = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            const axisY = (pad.axes.length > 1) ? pad.axes[1].getValue() : 0;
             left = axisX < -0.3;
             right = axisX > 0.3;
-            up = pad.buttons[0] && pad.buttons[0].pressed;
+            // Jump when pushing the left stick up beyond a threshold
+            up = axisY < -0.6;
             if (!pad._lastButtons) pad._lastButtons = [];
             const btn = pad.buttons;
-            if (btn[2] && btn[2].pressed && !pad._lastButtons[2]) punch = true;
-            if (btn[7] && btn[7].pressed && !pad._lastButtons[7]) shoot = true;
-            blockOrCharge = btn[5] && btn[5].pressed; // Usar solo RB para bloquear/cargar
+            // Gamepad mapping changes:
+            // A (btn 0) => Block/Charge
+            // B (btn 1) => Shoot
+            // X (btn 2) => Punch
+            if (btn[2] && btn[2].pressed && !pad._lastButtons[2]) punch = true; // X stays punch
+            if (btn[1] && btn[1].pressed && !pad._lastButtons[1]) shoot = true; // B becomes shoot
+            blockOrCharge = btn[0] && btn[0].pressed; // A becomes block/charge
             pad._lastButtons = btn.map(b => !!b.pressed);
         }
 
@@ -2556,5 +2574,109 @@ class GameScene extends Phaser.Scene {
             player.marioExplBuffer = [];
         }
     }
+}
+
+// --- ESCENA GAME OVER ---
+class GameOver extends Phaser.Scene {
+    constructor() { super('GameOver'); }
+    init(data) {
+        this.winnerIndex = data.winnerIndex ?? 0;
+        this.winnerChar = data.winnerChar ?? 0;
+        this.player1Index = data.player1Index ?? 0;
+        this.player2Index = data.player2Index ?? 1;
+        this.mode = data.mode || 'versus';
+    }
+    create() {
+        const { width, height } = this.scale;
+        this.cameras.main.setBackgroundColor(0x001d33);
+        const winnerName = this.winnerIndex === 0 ? (['Charles','Sofia','Franchesca','Mario'][this.player1Index] || 'Player 1') : (['Charles','Sofia','Franchesca','Mario'][this.player2Index] || 'Player 2');
+    this.add.text(width/2, 120, 'FIN DEL JUEGO', { font: '64px Arial', color: '#ff4444' }).setOrigin(0.5);
+    this.add.text(width/2, 200, `${winnerName} ganó!`, { font: '36px Arial', color: '#ffffff' }).setOrigin(0.5);
+
+        // Buttons
+        const buttonW = 260, buttonH = 64, spacing = 30;
+        const bx = width/2;
+        let by = height - 160;
+
+        this.buttons = [];
+
+        const restartBtn = this.add.rectangle(bx - (buttonW + spacing), by, buttonW, buttonH, 0x004466).setInteractive();
+        const restartTxt = this.add.text(restartBtn.x, restartBtn.y, isEnglish ? 'RESTART' : 'REINICIAR', { font: '24px Arial', color: '#00ffff' }).setOrigin(0.5);
+        this.buttons.push({ rect: restartBtn, txt: restartTxt, callback: () => {
+            // Reiniciar: detener escenas y reiniciar GameScene
+            try { this.scene.stop('HudScene'); } catch (e) {}
+            try { this.scene.stop('GameScene'); } catch (e) {}
+            // remove map texture so next GameScene will reload and position it cleanly
+            try { this.textures.remove('map1'); } catch (e) {}
+            this.scene.stop('GameOver');
+            this.scene.start('GameScene', { player1Index: this.player1Index, player2Index: this.player2Index, mode: this.mode, map: 'Mapa 1' });
+        }});
+
+        const charSelBtn = this.add.rectangle(bx, by, buttonW, buttonH, 0x003355).setInteractive();
+        const charSelTxt = this.add.text(charSelBtn.x, charSelBtn.y, isEnglish ? 'CHAR SELECT' : 'SELECCIONAR PERSONAJE', { font: '18px Arial', color: '#00ffff' }).setOrigin(0.5);
+        this.buttons.push({ rect: charSelBtn, txt: charSelTxt, callback: () => {
+            // Ir a selector de personaje: detener GameScene/HudScene primero
+            try { this.scene.stop('HudScene'); } catch (e) {}
+            try { this.scene.stop('GameScene'); } catch (e) {}
+            // remove map texture to avoid background staying behind or being mispositioned
+            try { this.textures.remove('map1'); } catch (e) {}
+            this.scene.stop('GameOver');
+            this.scene.start('CharacterSelector', { mode: this.mode });
+        }});
+
+        const menuBtn = this.add.rectangle(bx + (buttonW + spacing), by, buttonW, buttonH, 0x002244).setInteractive();
+        const menuTxt = this.add.text(menuBtn.x, menuBtn.y, isEnglish ? 'MENU' : 'MENU', { font: '24px Arial', color: '#00ffff' }).setOrigin(0.5);
+        this.buttons.push({ rect: menuBtn, txt: menuTxt, callback: () => {
+            // Volver al menú: detener escenas primero
+            try { this.scene.stop('HudScene'); } catch (e) {}
+            try { this.scene.stop('GameScene'); } catch (e) {}
+            // remove map texture to avoid background issues on next run
+            try { this.textures.remove('map1'); } catch (e) {}
+            this.scene.stop('GameOver');
+            this.scene.start('Menu');
+        }});
+
+        // Selector visual
+        this.selector = this.add.rectangle(this.buttons[0].rect.x, this.buttons[0].rect.y, buttonW + 12, buttonH + 12).setStrokeStyle(4, 0xffff00).setOrigin(0.5);
+        this.selectedIndex = 0;
+
+        // Input keys
+        this.keyLeft = this.input.keyboard.addKey('A');
+        this.keyRight = this.input.keyboard.addKey('D');
+        this.keyLeft2 = this.input.keyboard.addKey('LEFT');
+        this.keyRight2 = this.input.keyboard.addKey('RIGHT');
+        this.keyConfirmP1 = this.input.keyboard.addKey('SPACE');
+        this.keyConfirmP2 = this.input.keyboard.addKey('ENTER');
+
+        // Gamepad support
+        this.input.gamepad.on('connected', pad => { pad._leftPressed = pad._rightPressed = pad._aPressed = false; });
+
+        // Pointer handling
+        this.buttons.forEach((b, idx) => { b.rect.on('pointerdown', () => { this.buttons[idx].callback(); }); });
+    }
+    update() {
+        if (Phaser.Input.Keyboard.JustDown(this.keyLeft) || Phaser.Input.Keyboard.JustDown(this.keyLeft2)) this.moveSelector(-1);
+        if (Phaser.Input.Keyboard.JustDown(this.keyRight) || Phaser.Input.Keyboard.JustDown(this.keyRight2)) this.moveSelector(1);
+        if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) || Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)) this.selectCurrent();
+
+        const pads = this.input.gamepad.gamepads;
+        pads.forEach(pad => {
+            if (!pad) return;
+            const x = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (x < -0.6 && !pad._leftPressed) { this.moveSelector(-1); pad._leftPressed = true; }
+            else if (x > 0.6 && !pad._rightPressed) { this.moveSelector(1); pad._rightPressed = true; }
+            else if (x > -0.6 && x < 0.6) { pad._leftPressed = pad._rightPressed = false; }
+
+            const a = pad.buttons[0] && pad.buttons[0].pressed;
+            if (a && !pad._aPressed) { this.selectCurrent(); pad._aPressed = true; }
+            if (!a) pad._aPressed = false;
+        });
+    }
+    moveSelector(dir) {
+        this.selectedIndex = Phaser.Math.Wrap(this.selectedIndex + dir, 0, this.buttons.length);
+        const b = this.buttons[this.selectedIndex].rect;
+        if (b) { this.selector.x = b.x; this.selector.y = b.y; }
+    }
+    selectCurrent() { if (this.buttons && this.buttons[this.selectedIndex]) this.buttons[this.selectedIndex].callback(); }
 }
 
