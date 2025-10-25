@@ -15,6 +15,19 @@ function getPad(idx, scene) {
 // --- ESCENAS ---
 // ========================
 
+// Global error hooks to capture stack traces for runtime errors (helps trace undefined removeAllListeners)
+if (typeof window !== 'undefined') {
+    window.addEventListener('error', (e) => {
+        try {
+            console.warn('Global error caught:', e.message, e.filename + ':' + e.lineno + ':' + e.colno);
+            if (e.error && e.error.stack) console.warn(e.error.stack);
+        } catch (ex) { /* ignore */ }
+    });
+    window.addEventListener('unhandledrejection', (ev) => {
+        try { console.warn('Unhandled promise rejection:', ev.reason && ev.reason.stack ? ev.reason.stack : ev.reason); } catch (ex) { }
+    });
+}
+
 // --- ESCENA PRELOADER ---
 class Preloader extends Phaser.Scene {
     constructor() { super("Preloader"); }
@@ -61,16 +74,16 @@ class Preloader extends Phaser.Scene {
         this._mapping = mapping;
 
     // Cargar imagen del mapa 1 desde public/mapas (servida en la raíz)
-    // Nota: coloca tu archivo en public/mapas/mapa1.png
-    // Intentamos la ruta relativa primero (mapas/mapa1.png). Si falla, reintentamos con la ruta absoluta '/mapas/mapa1.png'.
+    // Nota: coloca tu archivo en public/mapas/mapaprov.png
+    // Intentamos la ruta relativa primero (mapas/mapaprov.png). Si falla, reintentamos con la ruta absoluta '/mapas/mapaprov.png'.
     this._map1Retry = false;
-    this.load.image('map1', 'mapas/mapa1.png');
+    this.load.image('map1', 'mapas/mapaprov.png');
     this.load.on('loaderror', (file) => {
         try {
             if (file && file.key === 'map1' && !this._map1Retry) {
                 console.warn('map1 failed to load (relative), retrying with absolute path');
                 this._map1Retry = true;
-                this.load.image('map1', '/mapas/mapa1.png');
+                this.load.image('map1', '/mapas/mapaprov.png');
                 this.load.start();
             }
         } catch (e) { /* ignore */ }
@@ -91,6 +104,23 @@ class Preloader extends Phaser.Scene {
         // Las cargas ya se hicieron como spritesheet para acciones multi-frame.
         // Creamos las animaciones y continuamos al menú.
         this.createAnimations();
+        // Fallback textures: si faltan algunos assets (target / tex_bullet), créalos con gráficos simples
+        try {
+            if (!this.textures.exists('target')) {
+                const g = this.make.graphics({ x: 0, y: 0, add: false });
+                g.fillStyle(0xffff00, 1);
+                g.fillCircle(8, 8, 8);
+                g.generateTexture('target', 16, 16);
+                g.destroy();
+            }
+            if (!this.textures.exists('tex_bullet')) {
+                const g2 = this.make.graphics({ x: 0, y: 0, add: false });
+                g2.fillStyle(0xffffff, 1);
+                g2.fillRect(0, 0, 6, 6);
+                g2.generateTexture('tex_bullet', 6, 6);
+                g2.destroy();
+            }
+        } catch (e) { /* ignore fallback generation errors */ }
         this.scene.start('Menu');
     }
 
@@ -111,13 +141,22 @@ class Preloader extends Phaser.Scene {
                 if (act === 'robo') desiredCount = 2;
 
                 try {
-                    if (desiredCount > 1 && this.textures.exists(key) && tex.frameTotal && tex.frameTotal > 1) {
-                        // Explicitly use the first desiredCount frames (0..desiredCount-1)
-                        const maxAvailable = Math.max(0, tex.frameTotal - 1);
-                        const endFrame = Math.min(maxAvailable, Math.max(0, desiredCount - 1));
-                        frames = this.anims.generateFrameNumbers(key, { start: 0, end: endFrame });
+                    // Build frames manually using the texture's frames map to avoid Phaser warnings
+                    if (this.textures.exists(key) && tex && tex.frames) {
+                        const framesList = [];
+                        // prefer numeric frame keys 0..n
+                        for (let f = 0; f < desiredCount; f++) {
+                            const fk = String(f);
+                            if (tex.frames.hasOwnProperty(fk)) {
+                                framesList.push({ key, frame: f });
+                            } else {
+                                // stop if the consecutive frame is missing
+                                break;
+                            }
+                        }
+                        if (framesList.length > 0) frames = framesList;
+                        else frames = [{ key, frame: 0 }];
                     } else {
-                        // Single-frame: show frame 0 only
                         frames = [{ key, frame: 0 }];
                     }
                 } catch (e) {
@@ -308,7 +347,7 @@ class ControlsScene extends Phaser.Scene {
         // Botón para volver
         const backBtn = this.add.rectangle(width / 2, height - 70, 220, 60, 0x003355).setInteractive();
         const backTxt = this.add.text(width / 2, height - 70, isEnglish ? "BACK" : "VOLVER", { font: "28px Arial", color: "#00ffff" }).setOrigin(0.5);
-        backBtn.on('pointerdown', () => this.scene.start("Menu"));
+    backBtn.on('pointerdown', () => { try { this.scene.start("Menu"); } catch (e) { console.warn('Failed to go back to Menu:', e); } });
 
         // Tecla ESC para volver
         this.input.keyboard.on('keydown-ESC', () => this.scene.start("Menu"));
@@ -359,14 +398,17 @@ class ModeSelector extends Phaser.Scene {
             pad._aPressed = pad._bPressed = false;
         });
 
-        versusButton.on('pointerdown', () => this.scene.start("CharacterSelector", { mode: "versus" }));
-        coopButton.on('pointerdown', () => this.scene.start("CharacterSelector", { mode: "cooperativo" }));
+    versusButton.on('pointerdown', () => { try { this.scene.start("CharacterSelector", { mode: "versus" }); } catch (e) { console.warn('Failed to start CharacterSelector (versus):', e); } });
+    coopButton.on('pointerdown', () => { try { this.scene.start("CharacterSelector", { mode: "cooperativo" }); } catch (e) { console.warn('Failed to start CharacterSelector (cooperativo):', e); } });
     }
 
     update() {
         if (Phaser.Input.Keyboard.JustDown(this.keyLeft) || Phaser.Input.Keyboard.JustDown(this.keyLeft2)) this.moveSelector(-1);
         if (Phaser.Input.Keyboard.JustDown(this.keyRight) || Phaser.Input.Keyboard.JustDown(this.keyRight2)) this.moveSelector(1);
-        if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) || Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)) this.buttons[this.selectedIndex].callback();
+        if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) || Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)) {
+            const btn = this.buttons && this.buttons[this.selectedIndex];
+            if (btn && typeof btn.callback === 'function') btn.callback();
+        }
         if (Phaser.Input.Keyboard.JustDown(this.keyBackP1) || Phaser.Input.Keyboard.JustDown(this.keyBackP2)) this.scene.start("Menu");
 
         const pads = this.input.gamepad.gamepads;
@@ -379,7 +421,10 @@ class ModeSelector extends Phaser.Scene {
 
             // A confirm
             const a = pad.buttons[0] && pad.buttons[0].pressed;
-            if (a && !pad._aPressed) { this.buttons[this.selectedIndex].callback(); pad._aPressed = true; }
+            if (a && !pad._aPressed) {
+                const btn = this.buttons && this.buttons[this.selectedIndex];
+                if (btn && typeof btn.callback === 'function') { btn.callback(); pad._aPressed = true; }
+            }
             if (!a) pad._aPressed = false;
 
             // B back
@@ -624,7 +669,9 @@ class MapSelector extends Phaser.Scene {
 
         this.prev.on('pointerdown', () => this.changeMap(-1));
         this.next.on('pointerdown', () => this.changeMap(1));
-        this.startButton.on('pointerdown', () => this.startGame());
+        this.startButton.on('pointerdown', () => {
+            try { this.startGame(); } catch (e) { console.warn('startGame() failed:', e); }
+        });
 
         // keyboard nav and confirm/back
         this.keyLeft = this.input.keyboard.addKey('A');
@@ -807,7 +854,7 @@ class GameScene extends Phaser.Scene {
                     try {
                         if (file && file.key === 'map1' && !this._map1InGameRetry) {
                             this._map1InGameRetry = true;
-                            this.load.image('map1', '/mapas/mapa1.png');
+                            this.load.image('map1', '/mapas/mapaprov.png');
                             // ensure we add when this second attempt completes
                             this.load.once('filecomplete-image-map1', () => { addBgIfReady('map1'); }, this);
                             this.load.start();
@@ -815,7 +862,7 @@ class GameScene extends Phaser.Scene {
                     } catch (e) { /* ignore */ }
                 }, this);
                 // start the loader for the first attempt
-                this.load.image('map1', 'mapas/mapa1.png');
+                this.load.image('map1', 'mapas/mapaprov.png');
                 this.load.start();
             }
         }
@@ -874,6 +921,10 @@ class GameScene extends Phaser.Scene {
         // Cambios: vida 1000, energía 500, contador de golpes y flag de daño
         this.players.push({
             sprite: p1Sprite, health: 1000, energy: 500, blocking: false,
+            secondHealth: 500, // coop: secondary life pool (half)
+            immobilized: false,
+            chargingShot: false,
+            chargeAmount: 0,
             lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 0,
             hitCount: 0, beingHit: false, hitTimer: 0,
             specialBuffer: [],
@@ -907,6 +958,10 @@ class GameScene extends Phaser.Scene {
 
         this.players.push({
             sprite: p2Sprite, health: 1000, energy: 500, blocking: false,
+            secondHealth: 500,
+            immobilized: false,
+            chargingShot: false,
+            chargeAmount: 0,
             lastShot: 0, lastPunch: 0, shotCD: 400, punchCD: 350, padIndex: 1,
             hitCount: 0, beingHit: false, hitTimer: 0,
             specialBuffer: [], // Para secuencia de botones
@@ -940,7 +995,23 @@ class GameScene extends Phaser.Scene {
         // Colliders
     // Colliders: players with groundGroup (invisible platforms)
     this.physics.add.collider(this.players[0].sprite, this.groundGroup);
-    this.physics.add.collider(this.players[1].sprite, this.groundGroup);
+    // If coop mode, share the same sprite between players and create reticle
+    if (this.mode === 'cooperativo') {
+        // Make player2 reference the same sprite as player1
+        this.players[1].sprite = this.players[0].sprite;
+        // Create a reticle that orbits around the single player
+        try {
+            if (this.textures.exists('target')) {
+                this.reticle = this.add.image(this.players[0].sprite.x, this.players[0].sprite.y + 48, 'target');
+            } else {
+                this.reticle = this.add.circle(this.players[0].sprite.x, this.players[0].sprite.y + 48, 8, 0xffff00);
+            }
+            this.physics.add.existing(this.reticle);
+            if (this.reticle.body) this.reticle.body.setAllowGravity(false);
+        } catch (e) { /* ignore */ }
+    } else {
+        this.physics.add.collider(this.players[1].sprite, this.groundGroup);
+    }
 
         // Projectiles group
         this.projectiles = this.physics.add.group();
@@ -968,6 +1039,18 @@ class GameScene extends Phaser.Scene {
             this.add.rectangle(150, barY + 28, barLength, 12, 0x00ccff).setOrigin(0, 0.5),
             this.add.rectangle(this.scale.width - 150, barY + 28, barLength, 12, 0x00ccff).setOrigin(1, 0.5)
         ];
+
+        // If cooperative mode: hide right-side player bars and add a small secondary HP bar below the main bar
+        if (this.mode === 'cooperativo') {
+            try {
+                if (this.hpBars[1]) this.hpBars[1].setVisible(false);
+                if (this.enBars[1]) this.enBars[1].setVisible(false);
+            } catch (e) {}
+            // small secondary HP bar under main player 1 bars (half-life representation)
+            const smallWidth = barLength / 2;
+            this.smallHPBar = this.add.rectangle(150, barY + 46, smallWidth, 10, 0xff8800).setOrigin(0, 0.5);
+            this.smallHPBar.max = smallWidth;
+        }
 
         // Keyboard controls
         this.keysP1 = this.input.keyboard.addKeys({
@@ -1001,14 +1084,20 @@ class GameScene extends Phaser.Scene {
         if (!target) { if (!proj.piercing) proj.destroy(); return; }
 
         const damage = (proj.damage != null) ? proj.damage : 20;
-        if (!target.blocking) {
-            target.health = Math.max(0, target.health - damage);
-            target.beingHit = true;
-            target.hitTimer = this.time.now + 300;
-        } else {
-            // daño reducido al bloquear
-            target.health = Math.max(0, target.health - Math.floor(damage * 0.35));
+
+        // In cooperative mode, avoid damaging the shared player (friendly fire)
+        if (this.mode === 'cooperativo') {
+            const shooterSprite = this.players[proj.shooter] && this.players[proj.shooter].sprite;
+            const hitSprite = target && target.sprite;
+            if (shooterSprite && hitSprite && shooterSprite === hitSprite) {
+                // friendly projectile - ignore
+                if (!proj.piercing) proj.destroy();
+                return;
+            }
         }
+
+        // Delegate damage handling to central helper (handles secondary HP in coop)
+        this.applyDamageToPlayer(hitPlayerIndex, damage);
 
         if (!proj.piercing) proj.destroy();
     }
@@ -1024,6 +1113,39 @@ class GameScene extends Phaser.Scene {
             return; // Ninguno es proyectil, no hacer nada
         }
         this.onProjectileHit(proj, hitPlayerIndex);
+    }
+
+    // Central damage application helper. Handles cooperative secondary HP, immobilization and visual flags.
+    applyDamageToPlayer(targetIndex, damage) {
+        const target = this.players[targetIndex];
+        if (!target) return;
+
+        // In cooperative mode we prefer draining main health first, then secondary pool
+        if (this.mode === 'cooperativo') {
+            if (target.health > 0) {
+                // subtract from main health
+                const prev = target.health;
+                target.health = Math.max(0, target.health - damage);
+                target.beingHit = true;
+                target.hitTimer = this.time.now + 300;
+                // if main just reached 0, set immobilized flag
+                if (prev > 0 && target.health === 0) {
+                    target.immobilized = true;
+                    // provide small feedback
+                    this.cameras.main.flash(160, 255, 120, 120);
+                }
+            } else {
+                // drain secondary pool
+                target.secondHealth = Math.max(0, (target.secondHealth || 0) - damage);
+                target.beingHit = true;
+                target.hitTimer = this.time.now + 300;
+            }
+        } else {
+            // normal mode: direct to main health
+            target.health = Math.max(0, target.health - damage);
+            target.beingHit = true;
+            target.hitTimer = this.time.now + 300;
+        }
     }
 
     update(time) {
@@ -1047,29 +1169,61 @@ class GameScene extends Phaser.Scene {
         // Check for game over (any player's health reaches 0) with a short cooldown so it can fire every match
         const now = time || this.time.now;
         if (now > (this._gameOverCooldownUntil || 0)) {
-            if (this.players[0].health <= 0 || this.players[1].health <= 0) {
-                const loser = (this.players[0].health <= 0) ? 0 : 1;
-                const winner = 1 - loser;
-                // set cooldown 1s to avoid double-trigger
-                this._gameOverCooldownUntil = now + 1000;
-                // launch GameOver and stop this scene
-                this.scene.launch('GameOver', {
-                    winnerIndex: winner,
-                    winnerChar: (winner === 0) ? this.player1Index : this.player2Index,
-                    player1Index: this.player1Index,
-                    player2Index: this.player2Index,
-                    mode: this.mode
-                });
-                this.scene.stop();
+            if (this.mode === 'cooperativo') {
+                // in coop we use the secondary pool: game over only when secondary pool depleted
+                const p0 = this.players[0];
+                if (p0 && (p0.secondHealth || 0) <= 0) {
+                    this._gameOverCooldownUntil = now + 1000;
+                    // treat player 1 as loser for payload; in coop both lose
+                    try {
+                        this.scene.launch('GameOver', {
+                        winnerIndex: -1,
+                        winnerChar: (this.player1Index || 0),
+                        player1Index: this.player1Index,
+                        player2Index: this.player2Index,
+                        mode: this.mode
+                        });
+                    } catch (e) { console.warn('Failed to launch GameOver scene (coop):', e); }
+                    try { this.scene.stop(); } catch (e) { console.warn('Failed to stop current scene after launching GameOver (coop):', e); }
+                }
+            } else {
+                if (this.players[0].health <= 0 || this.players[1].health <= 0) {
+                    const loser = (this.players[0].health <= 0) ? 0 : 1;
+                    const winner = 1 - loser;
+                    // set cooldown 1s to avoid double-trigger
+                    this._gameOverCooldownUntil = now + 1000;
+                    // launch GameOver and stop this scene
+                    try {
+                        this.scene.launch('GameOver', {
+                        winnerIndex: winner,
+                        winnerChar: (winner === 0) ? this.player1Index : this.player2Index,
+                        player1Index: this.player1Index,
+                        player2Index: this.player2Index,
+                        mode: this.mode
+                        });
+                    } catch (e) { console.warn('Failed to launch GameOver scene:', e); }
+                    try { this.scene.stop(); } catch (e) { console.warn('Failed to stop current scene after launching GameOver:', e); }
+                }
             }
         }
 
         // Barras ajustadas a vida/energía máxima
         const maxHP = 1000, maxEN = 500, barLength = 400;
         this.hpBars[0].width = Math.max(0, (this.players[0].health / maxHP) * barLength);
-        this.hpBars[1].width = Math.max(0, (this.players[1].health / maxHP) * barLength);
         this.enBars[0].width = Math.max(0, (this.players[0].energy / maxEN) * barLength);
-        this.enBars[1].width = Math.max(0, (this.players[1].energy / maxEN) * barLength);
+        if (this.mode === 'cooperativo') {
+            // hide/disable right bars and update small secondary HP bar
+            try {
+                if (this.hpBars[1]) this.hpBars[1].setVisible(false);
+                if (this.enBars[1]) this.enBars[1].setVisible(false);
+                const sec = this.players[0].secondHealth || 0;
+                const maxSec = 500; // second pool max
+                if (this.smallHPBar) this.smallHPBar.width = Math.max(0, (sec / maxSec) * this.smallHPBar.max);
+            } catch (e) { /* ignore UI errors */ }
+        } else {
+            this.hpBars[1].width = Math.max(0, (this.players[1].health / maxHP) * barLength);
+            this.enBars[1].width = Math.max(0, (this.players[1].energy / maxEN) * barLength);
+        }
 
         this.projectiles.children.iterate(proj => {
             if (!proj) return;
@@ -1129,6 +1283,115 @@ class GameScene extends Phaser.Scene {
         }
 
         const pad = getPad(player.padIndex, this);
+
+        // CO-OP: player index 1 does not move the shared character; they control the reticle and shooting
+        // If the main player is immobilized (secondary HP depleted state), they can't move or charge
+        if (this.mode === 'cooperativo' && player.immobilized && i === 0) {
+            try { sprite.setVelocityX(0); } catch (e) {}
+            player.chargingShot = false;
+            player.chargeAmount = 0;
+            return;
+        }
+        if (this.mode === 'cooperativo' && i === 1) {
+            // Ensure reticle exists
+            if (!this.reticle) return;
+            // handle gamepad aiming for player 2
+            if (pad && pad.connected) {
+                const ax = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+                const ay = (pad.axes.length > 1) ? pad.axes[1].getValue() : 0;
+                const dead = 0.15;
+                const maxDist = 300;
+                if (Math.abs(ax) > dead || Math.abs(ay) > dead) {
+                    this.reticle.x = this.players[0].sprite.x + ax * maxDist;
+                    this.reticle.y = this.players[0].sprite.y + ay * maxDist;
+                }
+                // shooting with B (button 1)
+                if (!pad._lastButtons) pad._lastButtons = [];
+                const btn = pad.buttons;
+                const shootHeld = btn[1] && btn[1].pressed;
+                const shootPressed = shootHeld && !pad._lastButtons[1];
+                pad._lastButtons = btn.map(b => !!b.pressed);
+
+                // Determine if both players are holding the block/charge button (A -> index 0) or keyboard block keys
+                const pad0 = getPad(0, this);
+                const pad1 = getPad(1, this);
+                const p1Block = (pad0 && pad0.connected && pad0.buttons[0] && pad0.buttons[0].pressed) || this.keysP1.block.isDown;
+                const p2Block = (pad1 && pad1.connected && pad1.buttons[0] && pad1.buttons[0].pressed) || this.keysP2.block.isDown;
+                const bothBlocking = p1Block && p2Block;
+
+                // Charging mechanic: quick tap -> free shot (no energy cost). Hold while BOTH players hold block -> start charging (consumes shooter's energy)
+                if (shootHeld && bothBlocking) {
+                    // start/continue charging
+                    if (!player.chargingShot) {
+                        player.chargingShot = true;
+                        player.chargeAmount = 0;
+                        player.chargeStart = time;
+                    }
+                    // consume energy from shooter over time
+                    const dt = this.game.loop.delta / 1000;
+                    const energyRate = 160; // energy units consumed per second while charging (tunable)
+                    const consume = Math.min(player.energy, energyRate * dt);
+                    player.energy = Math.max(0, player.energy - consume);
+                    player.chargeAmount = (player.chargeAmount || 0) + consume;
+                    // visual feedback: grow reticle a bit
+                    try { if (this.reticle) this.reticle.setScale(1 + Math.min(0.8, player.chargeAmount / 300)); } catch (e) {}
+                } else if (player.chargingShot && !shootHeld) {
+                    // released: fire charged shot. Damage scales with chargeAmount. Reset charge state.
+                    const baseDamage = 20;
+                    const extra = Math.floor((player.chargeAmount || 0) * 0.04); // tunable: 25 energy -> +1 damage
+                    const damage = baseDamage + extra;
+                    player.lastShot = time;
+                    player.chargingShot = false;
+                    player.chargeAmount = 0;
+                    try { if (this.reticle) this.reticle.setScale(1); } catch (e) {}
+                    this.spawnProjectile(i, damage);
+                } else if (shootPressed) {
+                    // quick tap: free, base damage, no energy consumed
+                    const baseDamage = 20;
+                    if ((time - player.lastShot) > player.shotCD) {
+                        player.lastShot = time;
+                        this.spawnProjectile(i, baseDamage);
+                    }
+                }
+            } else {
+                // keyboard fallback: use arrow keys to nudge the reticle
+                if (this.keysP2.left.isDown) this.reticle.x -= 4;
+                if (this.keysP2.right.isDown) this.reticle.x += 4;
+                if (this.keysP2.up.isDown) this.reticle.y -= 4;
+                if (this.keysP2.down.isDown) this.reticle.y += 4;
+                // keyboard fallback: P2 shoot/charge
+                const shootHeldKB = this.keysP2.shoot.isDown;
+                const shootPressedKB = Phaser.Input.Keyboard.JustDown(this.keysP2.shoot);
+                const p1BlockKB = this.keysP1.block.isDown;
+                const p2BlockKB = this.keysP2.block.isDown;
+                const bothBlockingKB = p1BlockKB && p2BlockKB;
+                if (shootHeldKB && bothBlockingKB) {
+                    if (!player.chargingShot) { player.chargingShot = true; player.chargeAmount = 0; player.chargeStart = time; }
+                    const dt = this.game.loop.delta / 1000;
+                    const energyRate = 160;
+                    const consume = Math.min(player.energy, energyRate * dt);
+                    player.energy = Math.max(0, player.energy - consume);
+                    player.chargeAmount = (player.chargeAmount || 0) + consume;
+                    try { if (this.reticle) this.reticle.setScale(1 + Math.min(0.8, player.chargeAmount / 300)); } catch (e) {}
+                } else if (player.chargingShot && !shootHeldKB) {
+                    const baseDamage = 20;
+                    const extra = Math.floor((player.chargeAmount || 0) * 0.04);
+                    const damage = baseDamage + extra;
+                    player.lastShot = time;
+                    player.chargingShot = false;
+                    player.chargeAmount = 0;
+                    try { if (this.reticle) this.reticle.setScale(1); } catch (e) {}
+                    this.spawnProjectile(i, damage);
+                } else if (shootPressedKB) {
+                    if ((time - player.lastShot) > player.shotCD) {
+                        player.lastShot = time;
+                        this.spawnProjectile(i, 20);
+                    }
+                }
+            }
+            // reticle should not move the shared player sprite; return early
+            return;
+        }
 
         let left = false, right = false, up = false, punch = false, blockOrCharge = false, shoot = false;
 
@@ -1316,14 +1579,17 @@ class GameScene extends Phaser.Scene {
     }
 
     spawnProjectile(i) {
+        // legacy signature: spawnProjectile(i) -> now supports optional damage via spawnProjectile(i, damage)
+        const args = Array.prototype.slice.call(arguments);
+        const explicitDamage = (args.length > 1) ? args[1] : null;
         const shooter = this.players[i];
         if (!shooter || !shooter.sprite) return;
-
         const sx = shooter.sprite.x + (shooter.sprite.flipX ? -30 : 30);
         const sy = shooter.sprite.y - 10;
 
-    const proj = this.physics.add.sprite(sx, sy, this.textures.exists('tex_bullet') ? 'tex_bullet' : 'tex_bullet');
-        proj.shooter = i;
+        const proj = this.physics.add.sprite(sx, sy, this.textures.exists('tex_bullet') ? 'tex_bullet' : 'tex_bullet');
+    proj.shooter = i;
+    if (explicitDamage != null) proj.damage = explicitDamage;
 
         // Ensure shoot animation plays immediately for feedback
         const shooterChar = (i === 0) ? this.player1Index : this.player2Index;
@@ -1337,8 +1603,18 @@ class GameScene extends Phaser.Scene {
         this.projectiles.add(proj);
         proj.body.setAllowGravity(false);
 
-        const velocity = shooter.sprite.flipX ? -450 : 450;
-        if (proj && proj.body) proj.body.setVelocityX(velocity);
+        // If cooperative mode and reticle exists, fire toward the reticle position
+        if (this.mode === 'cooperativo' && this.reticle) {
+            const angle = Phaser.Math.Angle.Between(sx, sy, this.reticle.x, this.reticle.y);
+            const speed = 600;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            if (proj && proj.body) proj.body.setVelocity(vx, vy);
+            proj.rotation = angle;
+        } else {
+            const velocity = shooter.sprite.flipX ? -450 : 450;
+            if (proj && proj.body) proj.body.setVelocityX(velocity);
+        }
 
         this.time.delayedCall(2200, () => {
             if (proj && proj.active) proj.destroy();
@@ -1346,6 +1622,8 @@ class GameScene extends Phaser.Scene {
     }
 
     doPunch(i) {
+        // In cooperative mode we don't allow PvP punches
+        if (this.mode === 'cooperativo') return;
         const attacker = this.players[i];
         const target = this.players[1 - i];
         const dist = Phaser.Math.Distance.Between(attacker.sprite.x, attacker.sprite.y, target.sprite.x, target.sprite.y);
@@ -1398,6 +1676,7 @@ class GameScene extends Phaser.Scene {
     }
 
     handleCharlesSpecial(i, time) {
+        if (this.mode === 'cooperativo') return; // disable PvP specials in coop
         const player = this.players[i];
         const sprite = player.sprite;
         // Solo Charles (índice 0 en el selector de personaje)
@@ -1573,6 +1852,7 @@ class GameScene extends Phaser.Scene {
     }
 
     handleCharlesExplosion(i, time) {
+        if (this.mode === 'cooperativo') return; // disable PvP explosion in coop
         const player = this.players[i];
         const sprite = player.sprite;
         // Solo Charles (índice 0 en el selector de personaje)
@@ -1653,6 +1933,7 @@ class GameScene extends Phaser.Scene {
     }
 
     handleSofiaLaser(i, time) {
+        if (this.mode === 'cooperativo') return; // disable PvP Sofia laser in coop
         const player = this.players[i];
         const sprite = player.sprite;
 
@@ -1740,6 +2021,7 @@ class GameScene extends Phaser.Scene {
     }
 
     handleSofiaTeleport(i, time) {
+        if (this.mode === 'cooperativo') return; // disable PvP Sofia teleport in coop
         const player = this.players[i];
         const sprite = player.sprite;
 
@@ -1820,6 +2102,7 @@ class GameScene extends Phaser.Scene {
     }
 
     handleSofiaMeteor(i, time) {
+        if (this.mode === 'cooperativo') return; // disable PvP Sofia meteor in coop
         const player = this.players[i];
         const sprite = player.sprite;
 
@@ -1897,6 +2180,7 @@ class GameScene extends Phaser.Scene {
         
 
         handleSofiaRobo(i, time) {
+        if (this.mode === 'cooperativo') return; // disable PvP Sofia robo in coop
             const player = this.players[i];
             const sprite = player.sprite;
             if ((i === 0 && this.player1Index !== 1) || (i === 1 && this.player2Index !== 1)) return;
@@ -1919,6 +2203,7 @@ class GameScene extends Phaser.Scene {
         }
 
     handleFranchescaEnergy(i, time) {
+        if (this.mode === 'cooperativo') return; // disable PvP Franchesca energy attacks in coop
         const player = this.players[i];
         const sprite = player.sprite;
 
@@ -2751,7 +3036,16 @@ class GameOver extends Phaser.Scene {
         this.input.gamepad.on('connected', pad => { pad._leftPressed = pad._rightPressed = pad._aPressed = false; });
 
         // Pointer handling
-        this.buttons.forEach((b, idx) => { b.rect.on('pointerdown', () => { this.buttons[idx].callback(); }); });
+        this.buttons.forEach((b, idx) => {
+            b.rect.on('pointerdown', () => {
+                try {
+                    const cb = this.buttons && this.buttons[idx] && this.buttons[idx].callback;
+                    if (typeof cb === 'function') cb();
+                } catch (e) {
+                    console.warn('Menu button callback failed:', e);
+                }
+            });
+        });
     }
     update() {
         if (Phaser.Input.Keyboard.JustDown(this.keyLeft) || Phaser.Input.Keyboard.JustDown(this.keyLeft2)) this.moveSelector(-1);
