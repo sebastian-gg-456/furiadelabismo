@@ -730,6 +730,23 @@ class GameScene extends Phaser.Scene {
         this.selectedMap = data.map ?? "Mapa 1";
     }
 
+    // Energy helpers: support a shared pool in cooperative mode
+    getEnergy(player) {
+        if (this.mode === 'cooperativo') return (this.sharedEnergy != null) ? this.sharedEnergy : 0;
+        return player.energy || 0;
+    }
+
+    setEnergyFor(player, value) {
+        const v = Math.max(0, Math.min(this.maxEN || 500, value));
+        if (this.mode === 'cooperativo') this.sharedEnergy = v;
+        else player.energy = v;
+    }
+
+    changeEnergyFor(player, delta) {
+        const cur = this.getEnergy(player);
+        this.setEnergyFor(player, cur + delta);
+    }
+
     // Create invisible platforms/ground for a given map name
     createMapPlatforms(mapName, width, height) {
         // Instead of creating bodies directly here, store platform data and build from it.
@@ -1050,6 +1067,9 @@ class GameScene extends Phaser.Scene {
             const smallWidth = barLength / 2;
             this.smallHPBar = this.add.rectangle(150, barY + 46, smallWidth, 10, 0xff8800).setOrigin(0, 0.5);
             this.smallHPBar.max = smallWidth;
+            // initialize shared energy pool for coop
+            this.maxEN = 500;
+            this.sharedEnergy = this.maxEN;
         }
 
         // Keyboard controls
@@ -1208,9 +1228,11 @@ class GameScene extends Phaser.Scene {
         }
 
         // Barras ajustadas a vida/energía máxima
-        const maxHP = 1000, maxEN = 500, barLength = 400;
-        this.hpBars[0].width = Math.max(0, (this.players[0].health / maxHP) * barLength);
-        this.enBars[0].width = Math.max(0, (this.players[0].energy / maxEN) * barLength);
+    const maxHP = 1000, maxEN = this.maxEN || 500, barLength = 400;
+    this.hpBars[0].width = Math.max(0, (this.players[0].health / maxHP) * barLength);
+    // energy bar: use shared pool in coop, otherwise per-player
+    const en0 = (this.mode === 'cooperativo') ? (this.sharedEnergy || 0) : this.players[0].energy;
+    this.enBars[0].width = Math.max(0, (en0 / maxEN) * barLength);
         if (this.mode === 'cooperativo') {
             // hide/disable right bars and update small secondary HP bar
             try {
@@ -1293,103 +1315,97 @@ class GameScene extends Phaser.Scene {
             return;
         }
         if (this.mode === 'cooperativo' && i === 1) {
-            // Ensure reticle exists
+            // P2 controls the reticle and charges/shoots from the shared shooter (player 0).
+            // All charged-shot logic is handled here so P2 is the authority for charging.
             if (!this.reticle) return;
-            // handle gamepad aiming for player 2
+
+            const shooter = this.players[0];
+            const coopPlayer = player; // alias for clarity (player 1)
+            const dead = 0.15; const maxDist = 300;
+
             if (pad && pad.connected) {
                 const ax = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
                 const ay = (pad.axes.length > 1) ? pad.axes[1].getValue() : 0;
-                const dead = 0.15;
-                const maxDist = 300;
                 if (Math.abs(ax) > dead || Math.abs(ay) > dead) {
-                    this.reticle.x = this.players[0].sprite.x + ax * maxDist;
-                    this.reticle.y = this.players[0].sprite.y + ay * maxDist;
+                    this.reticle.x = shooter.sprite.x + ax * maxDist;
+                    this.reticle.y = shooter.sprite.y + ay * maxDist;
                 }
-                // shooting with B (button 1)
+
                 if (!pad._lastButtons) pad._lastButtons = [];
                 const btn = pad.buttons;
-                const shootHeld = btn[1] && btn[1].pressed;
-                const shootPressed = shootHeld && !pad._lastButtons[1];
+                // Button mapping fallbacks: B (1) quick-tap, X (2) charge-hold preferred, A (0) also accepted for charge as fallback
+                const quickPressed = btn[1] && btn[1].pressed && !pad._lastButtons[1];
+                const chargeHeld = (btn[2] && btn[2].pressed) || (btn[0] && btn[0].pressed);
+                const chargeReleased = ((!btn[2] || !btn[2].pressed) && pad._lastButtons[2]) || ((!btn[0] || !btn[0].pressed) && pad._lastButtons[0]);
                 pad._lastButtons = btn.map(b => !!b.pressed);
 
-                // Determine if both players are holding the block/charge button (A -> index 0) or keyboard block keys
-                const pad0 = getPad(0, this);
-                const pad1 = getPad(1, this);
-                const p1Block = (pad0 && pad0.connected && pad0.buttons[0] && pad0.buttons[0].pressed) || this.keysP1.block.isDown;
-                const p2Block = (pad1 && pad1.connected && pad1.buttons[0] && pad1.buttons[0].pressed) || this.keysP2.block.isDown;
-                const bothBlocking = p1Block && p2Block;
-
-                // Charging mechanic: quick tap -> free shot (no energy cost). Hold while BOTH players hold block -> start charging (consumes shooter's energy)
-                if (shootHeld && bothBlocking) {
-                    // start/continue charging
-                    if (!player.chargingShot) {
-                        player.chargingShot = true;
-                        player.chargeAmount = 0;
-                        player.chargeStart = time;
-                    }
-                    // consume energy from shooter over time
+                // CHARGE: hold to accumulate using shared energy (P2 is authority), release to fire one charged projectile from shooter -> reticle
+                if (chargeHeld && this.getEnergy(coopPlayer) > 0) {
+                    if (!coopPlayer.chargingShot) { coopPlayer.chargingShot = true; coopPlayer.chargeAmount = 0; coopPlayer.chargeStart = time; }
                     const dt = this.game.loop.delta / 1000;
-                    const energyRate = 160; // energy units consumed per second while charging (tunable)
-                    const consume = Math.min(player.energy, energyRate * dt);
-                    player.energy = Math.max(0, player.energy - consume);
-                    player.chargeAmount = (player.chargeAmount || 0) + consume;
-                    // visual feedback: grow reticle a bit
-                    try { if (this.reticle) this.reticle.setScale(1 + Math.min(0.8, player.chargeAmount / 300)); } catch (e) {}
-                } else if (player.chargingShot && !shootHeld) {
-                    // released: fire charged shot. Damage scales with chargeAmount. Reset charge state.
+                    const energyRate = 160; // energy per second consumed while charging
+                    const consume = Math.min(this.getEnergy(coopPlayer), energyRate * dt);
+                    this.changeEnergyFor(coopPlayer, -consume);
+                    coopPlayer.chargeAmount = (coopPlayer.chargeAmount || 0) + consume;
+                    try { if (this.reticle) this.reticle.setScale(1 + Math.min(1.2, coopPlayer.chargeAmount / 240)); } catch (e) {}
+                }
+
+                if (chargeReleased && coopPlayer.chargingShot) {
+                    // compute damage in discrete steps: every 25 energy -> +3 damage
                     const baseDamage = 20;
-                    const extra = Math.floor((player.chargeAmount || 0) * 0.04); // tunable: 25 energy -> +1 damage
-                    const damage = baseDamage + extra;
-                    player.lastShot = time;
-                    player.chargingShot = false;
-                    player.chargeAmount = 0;
+                    const steps = Math.floor((coopPlayer.chargeAmount || 0) / 25);
+                    const damage = baseDamage + (steps * 3);
+                    coopPlayer.chargingShot = false; coopPlayer.chargeAmount = 0; coopPlayer.chargeStart = 0;
                     try { if (this.reticle) this.reticle.setScale(1); } catch (e) {}
-                    this.spawnProjectile(i, damage);
-                } else if (shootPressed) {
-                    // quick tap: free, base damage, no energy consumed
-                    const baseDamage = 20;
-                    if ((time - player.lastShot) > player.shotCD) {
-                        player.lastShot = time;
-                        this.spawnProjectile(i, baseDamage);
+                    if ((time - shooter.lastShot) > shooter.shotCD) { // charged shot can be fired as long as coopPlayer had energy while charging
+                        shooter.lastShot = time;
+                        this.spawnProjectile(0, damage);
+                    }
+                }
+
+                // QUICK TAP: free basic shot from shooter aimed at reticle
+                if (quickPressed) {
+                    if ((time - shooter.lastShot) > shooter.shotCD) {
+                        shooter.lastShot = time;
+                        this.spawnProjectile(0, 20);
                     }
                 }
             } else {
-                // keyboard fallback: use arrow keys to nudge the reticle
+                // keyboard fallback: arrow keys to nudge reticle; 'O' is charge (hold), 'P' is quick tap
                 if (this.keysP2.left.isDown) this.reticle.x -= 4;
                 if (this.keysP2.right.isDown) this.reticle.x += 4;
                 if (this.keysP2.up.isDown) this.reticle.y -= 4;
                 if (this.keysP2.down.isDown) this.reticle.y += 4;
-                // keyboard fallback: P2 shoot/charge
-                const shootHeldKB = this.keysP2.shoot.isDown;
-                const shootPressedKB = Phaser.Input.Keyboard.JustDown(this.keysP2.shoot);
-                const p1BlockKB = this.keysP1.block.isDown;
-                const p2BlockKB = this.keysP2.block.isDown;
-                const bothBlockingKB = p1BlockKB && p2BlockKB;
-                if (shootHeldKB && bothBlockingKB) {
-                    if (!player.chargingShot) { player.chargingShot = true; player.chargeAmount = 0; player.chargeStart = time; }
+
+                const chargeHeldKB = this.keysP2.charge.isDown;
+                const chargeReleasedKB = Phaser.Input.Keyboard.JustUp(this.keysP2.charge);
+                const quickKB = Phaser.Input.Keyboard.JustDown(this.keysP2.shoot);
+
+                if (chargeHeldKB && this.getEnergy(coopPlayer) > 0) {
+                    if (!coopPlayer.chargingShot) { coopPlayer.chargingShot = true; coopPlayer.chargeAmount = 0; coopPlayer.chargeStart = time; }
                     const dt = this.game.loop.delta / 1000;
                     const energyRate = 160;
-                    const consume = Math.min(player.energy, energyRate * dt);
-                    player.energy = Math.max(0, player.energy - consume);
-                    player.chargeAmount = (player.chargeAmount || 0) + consume;
-                    try { if (this.reticle) this.reticle.setScale(1 + Math.min(0.8, player.chargeAmount / 300)); } catch (e) {}
-                } else if (player.chargingShot && !shootHeldKB) {
+                    const consume = Math.min(this.getEnergy(coopPlayer), energyRate * dt);
+                    this.changeEnergyFor(coopPlayer, -consume);
+                    coopPlayer.chargeAmount = (coopPlayer.chargeAmount || 0) + consume;
+                    try { if (this.reticle) this.reticle.setScale(1 + Math.min(1.2, coopPlayer.chargeAmount / 240)); } catch (e) {}
+                }
+
+                if (chargeReleasedKB && coopPlayer.chargingShot) {
                     const baseDamage = 20;
-                    const extra = Math.floor((player.chargeAmount || 0) * 0.04);
-                    const damage = baseDamage + extra;
-                    player.lastShot = time;
-                    player.chargingShot = false;
-                    player.chargeAmount = 0;
+                    const steps = Math.floor((coopPlayer.chargeAmount || 0) / 25);
+                    const damage = baseDamage + (steps * 3);
+                    coopPlayer.chargingShot = false; coopPlayer.chargeAmount = 0; coopPlayer.chargeStart = 0;
                     try { if (this.reticle) this.reticle.setScale(1); } catch (e) {}
-                    this.spawnProjectile(i, damage);
-                } else if (shootPressedKB) {
-                    if ((time - player.lastShot) > player.shotCD) {
-                        player.lastShot = time;
-                        this.spawnProjectile(i, 20);
-                    }
+                    if ((time - shooter.lastShot) > shooter.shotCD) { shooter.lastShot = time; this.spawnProjectile(0, damage); }
+                }
+
+                if (quickKB) {
+                    if ((time - shooter.lastShot) > shooter.shotCD) { shooter.lastShot = time; this.spawnProjectile(0, 20); }
                 }
             }
-            // reticle should not move the shared player sprite; return early
+
+            // reticle-only controller should not move the shared player sprite
             return;
         }
 
@@ -1443,7 +1459,8 @@ class GameScene extends Phaser.Scene {
                 // Cargar energía (lejos)
                 player.blocking = false;
                 sprite.setTint(0x2222cc); // Color para cargar
-                player.energy = Math.min(500, player.energy + 2.0); // Carga más rápida
+                // Use shared energy helper so coop mode updates the shared pool
+                this.changeEnergyFor(player, 2.0); // Carga más rápida
                 // intentar usar la textura específica de carga y mostrar frame 1
                 const chargeKey = `char${charIndexLocal}_charge`;
                 if (this.textures.exists(chargeKey)) {
@@ -1488,7 +1505,7 @@ class GameScene extends Phaser.Scene {
         if (up && sprite.body.onFloor()) sprite.setVelocityY(-560);
 
     // Pequeña recarga pasiva
-        player.energy = Math.min(500, player.energy + 0.05);
+        this.changeEnergyFor(player, 0.05);
 
         // Puñetazo: 50 de daño
         if (punch && (time - player.lastPunch) > player.punchCD) {
@@ -1500,13 +1517,19 @@ class GameScene extends Phaser.Scene {
         }
 
         // Disparo: 20 de daño, 100 energía
-        if (shoot && (time - player.lastShot) > player.shotCD && player.energy >= 100) {
-            player.lastShot = time;
-            player.energy = Math.max(0, player.energy - 100);
-            // lock shoot animation visibility for 600ms so it's noticeable
-            player._lockedAction = 'shoot';
-            player.actionLockUntil = time + 600;
-            this.spawnProjectile(i);
+    if (shoot && (time - player.lastShot) > player.shotCD && this.getEnergy(player) >= 100) {
+            // En modo cooperativo, si P2 está cargando, prevenir que P1 dispare manualmente
+            if (!(this.mode === 'cooperativo' && this.players[1] && this.players[1].chargingShot)) {
+                player.lastShot = time;
+        this.changeEnergyFor(player, -100);
+                // lock shoot animation visibility for 600ms so it's noticeable
+                player._lockedAction = 'shoot';
+                player.actionLockUntil = time + 600;
+                this.spawnProjectile(i);
+            } else {
+                // opcional: feedback mínimo (sin consumir energía ni disparar)
+                try { this.cameras.main.flash(80, 120, 120, 120); } catch (e) {}
+            }
         }
 
         // Animations: determine current action and play appropriate animation
@@ -1789,7 +1812,7 @@ class GameScene extends Phaser.Scene {
         }
 
         // Detectar secuencia: DERECHA, IZQ, GOLPE (en menos de 1s entre cada uno)
-        if (player.energy < 300) {
+        if (this.getEnergy(player) < 300) {
             player.transformBuffer = [];
             return;
         }
@@ -1836,7 +1859,7 @@ class GameScene extends Phaser.Scene {
             player.transformBuffer[2].k === "X"
         ) {
             // Activar transformación
-            player.energy = Math.max(0, player.energy - 300);
+            this.changeEnergyFor(player, -300);
             player.transformed = true;
             player.transformTimer = time + 8000; // Dura 8 segundos (ajusta si quieres)
             player.transformBuffer = [];
@@ -1875,7 +1898,7 @@ class GameScene extends Phaser.Scene {
         }
 
         // Detectar secuencia: DERECHA, DERECHA, GOLPE (en menos de 1s entre cada uno)
-        if (player.energy < 180) {
+        if (this.getEnergy(player) < 180) {
             player.explosionBuffer = [];
             return;
         }
@@ -1917,7 +1940,7 @@ class GameScene extends Phaser.Scene {
             player.explosionBuffer[1].k === "R" &&
             player.explosionBuffer[2].k === "X"
         ) {
-            player.energy = Math.max(0, player.energy - 180);
+            this.changeEnergyFor(player, -180);
             player.explosionPending = true;
             player.explosionTimer = time + 1500; // 1.5 segundos después
             player.explosionBuffer = [];
@@ -1941,7 +1964,7 @@ class GameScene extends Phaser.Scene {
         if ((i === 0 && this.player1Index !== 1) || (i === 1 && this.player2Index !== 1)) return;
 
         if (!player.sofiaLaserBuffer) player.sofiaLaserBuffer = [];
-        if (player.energy < 100) {
+        if (this.getEnergy(player) < 100) {
             player.sofiaLaserBuffer = [];
             return;
         }
@@ -1986,7 +2009,7 @@ class GameScene extends Phaser.Scene {
             player.sofiaLaserBuffer[2].k === "X"
         ) {
             // Gasta energía y dispara el láser
-            player.energy = Math.max(0, player.energy - 100);
+            this.changeEnergyFor(player, -100);
             const target = this.players[1 - i];
 
             // Efecto visual: línea láser
@@ -2074,7 +2097,7 @@ class GameScene extends Phaser.Scene {
             player.sofiaTeleportBuffer[2].k === "X"
         ) {
             // Gasta energía y teletransporta
-            player.energy = Math.max(0, player.energy - 100);
+            this.changeEnergyFor(player, -100);
             const target = this.players[1 - i];
 
             // Teletransporta a un lado del enemigo
@@ -2110,7 +2133,7 @@ class GameScene extends Phaser.Scene {
         if ((i === 0 && this.player1Index !== 1) || (i === 1 && this.player2Index !== 1)) return;
 
         if (!player.sofiaMeteorBuffer) player.sofiaMeteorBuffer = [];
-        if (player.energy < 250) {
+        if (this.getEnergy(player) < 250) {
             player.sofiaMeteorBuffer = [];
             return;
         }
@@ -2152,7 +2175,7 @@ class GameScene extends Phaser.Scene {
             player.sofiaMeteorBuffer[2].k === "X"
         ) {
             // Gasta energía y lanza el meteorito
-            player.energy = Math.max(0, player.energy - 250);
+            this.changeEnergyFor(player, -250);
             const target = this.players[1 - i];
 
             // Efecto visual: círculo rojo descendiendo (meteorito)
