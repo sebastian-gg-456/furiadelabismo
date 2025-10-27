@@ -55,8 +55,7 @@ export class BlueEnemy extends Physics.Arcade.Sprite {
         if (bullet) {
             bullet.fire(this.x, this.y, player_x, player_y, "enemy-bullet");
         }
-
-        this.anims.play("hit");
+        // animation calls removed; visuals will be handled by new assets
         if (!this.animation_is_playing && this.scale_damage > 1) {
             if (this.damage_life_point === 0) {
 

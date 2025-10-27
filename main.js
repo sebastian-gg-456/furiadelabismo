@@ -20,7 +20,7 @@ const gameConfig = {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    scene: [Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, GameOver]
+    scene: [Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver]
 };
 
 // Inicializar el juego

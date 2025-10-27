@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Test PJ2 Sprites</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.js"></script>
+    <style>
+        body { margin: 0; background: #222; }
+        canvas { display: block; margin: 20px auto; }
+        #info { color: white; text-align: center; font-family: monospace; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div id="info">Testing PJ2 Shoot and Punch Animations...</div>
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            backgroundColor: '#333333',
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        let sprite;
+        let infoText;
+
+        function preload() {
+            console.log('🎮 Preloading PJ2 sprites...');
+            
+            // Load pj2 shoot sprite (should be 384x64 with 6 frames of 64x64)
+            this.load.spritesheet('pj2_shoot', 'assets/player/pj2/pj2-disparo.png', { 
+                frameWidth: 64, 
+                frameHeight: 64 
+            });
+            
+            // Load pj2 punch sprite (should be 384x64 with 6 frames of 64x64)
+            this.load.spritesheet('pj2_punch', 'assets/player/pj2/PJ2-golpe.png', { 
+                frameWidth: 64, 
+                frameHeight: 64 
+            });
+
+            this.load.on('filecomplete', (key, type, data) => {
+                console.log(`✅ Loaded: ${key}`);
+            });
+
+            this.load.on('loaderror', (file) => {
+                console.error(`❌ Failed to load: ${file.key} from ${file.url}`);
+            });
+        }
+
+        function create() {
+            console.log('🎬 Creating animations...');
+            
+            const shootTex = this.textures.get('pj2_shoot');
+            const punchTex = this.textures.get('pj2_punch');
+            
+            console.log('Shoot texture frames:', shootTex.frameTotal);
+            console.log('Punch texture frames:', punchTex.frameTotal);
+
+            // Create shoot animation with all 6 frames
+            if (this.textures.exists('pj2_shoot')) {
+                this.anims.create({
+                    key: 'shoot_anim',
+                    frames: this.anims.generateFrameNumbers('pj2_shoot', { start: 0, end: 5 }),
+                    frameRate: 10,
+                    repeat: -1 // Loop for testing
+                });
+                console.log('✅ Shoot animation created with 6 frames');
+            }
+
+            // Create punch animation with all 6 frames
+            if (this.textures.exists('pj2_punch')) {
+                this.anims.create({
+                    key: 'punch_anim',
+                    frames: this.anims.generateFrameNumbers('pj2_punch', { start: 0, end: 5 }),
+                    frameRate: 10,
+                    repeat: -1 // Loop for testing
+                });
+                console.log('✅ Punch animation created with 6 frames');
+            }
+
+            // Create sprite in the center
+            sprite = this.add.sprite(400, 300, 'pj2_shoot');
+            sprite.setScale(3); // Scale up to see better
+
+            // Start with shoot animation
+            sprite.play('shoot_anim');
+            
+            infoText = this.add.text(400, 50, 'Playing: SHOOT animation (looping)\nPress SPACE to switch to PUNCH', {
+                fontSize: '20px',
+                fill: '#fff',
+                align: 'center'
+            }).setOrigin(0.5);
+
+            // Switch animations with spacebar
+            this.input.keyboard.on('keydown-SPACE', () => {
+                if (sprite.anims.currentAnim.key === 'shoot_anim') {
+                    sprite.play('punch_anim');
+                    infoText.setText('Playing: PUNCH animation (looping)\nPress SPACE to switch to SHOOT');
+                    console.log('Switched to PUNCH animation');
+                } else {
+                    sprite.play('shoot_anim');
+                    infoText.setText('Playing: SHOOT animation (looping)\nPress SPACE to switch to PUNCH');
+                    console.log('Switched to SHOOT animation');
+                }
+            });
+
+            console.log('✅ Scene created. Press SPACE to switch between animations.');
+        }
+
+        function update() {
+            // Display current frame
+            if (sprite && sprite.anims.currentAnim) {
+                const currentFrame = sprite.anims.currentFrame ? sprite.anims.currentFrame.index : 0;
+                // Update info text with current frame (non-invasive)
+            }
+        }
+    </script>
+</body>
+</html>

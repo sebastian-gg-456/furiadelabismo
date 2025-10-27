@@ -1,4 +1,4 @@
-// game.js
+﻿// game.js
 // ========================
 // --- VARIABLES GLOBALES ---
 // ========================
@@ -730,6 +730,76 @@ class GameScene extends Phaser.Scene {
         this.selectedMap = data.map ?? "Mapa 1";
     }
 
+    // Ensure player sprite exists with a live physics body, correct depth and colliders; rebind critical overlaps
+    ensurePlayerSpriteValid() {
+        try {
+            if (!this.players || !this.players[0]) return;
+            const p = this.players[0];
+            let s = p.sprite;
+            const needRecreate = !s || !s.scene || !s.body;
+            const width = this.scale.width, height = this.scale.height;
+            if (needRecreate) {
+                const key = `char${this.player1Index}_idle`;
+                const x = (s && s.x) ? s.x : (this._lastPlayerX || 200);
+                const y = (s && s.y) ? s.y : (this._lastPlayerY || height - 150);
+                try { if (s && s.destroy) s.destroy(); } catch (e) {}
+                s = this.physics.add.sprite(x, y, key).setCollideWorldBounds(true);
+                try { s.setDisplaySize(64, 64); } catch (e) {}
+                if (s.body && s.body.setSize) s.body.setSize(40, 56).setOffset(12, 8);
+                try { s.setFrame(0); } catch (e) {}
+                p.sprite = s;
+                if (this.mode === 'cooperativo' && this.players[1]) this.players[1].sprite = s;
+            }
+            // common sanity
+            p.immobilized = false;
+            p.blocking = false; p.wasBlocking = false; p.blockPressTime = 0;
+            // NO forzar a 1 HP, mantener la vida actual
+            try { s.setActive(true).setVisible(true).setAlpha(1).setDepth(8).setCollideWorldBounds(true); } catch (e) {}
+            if (s.body) {
+                try {
+                    s.body.enable = true;
+                    if (s.body.setAllowGravity) s.body.setAllowGravity(true);
+                    // ensure collision checks are on
+                    if (s.body.checkCollision) {
+                        s.body.checkCollision.none = false;
+                        s.body.checkCollision.up = s.body.checkCollision.down = s.body.checkCollision.left = s.body.checkCollision.right = true;
+                    }
+                } catch (e) {}
+            }
+            // Detach from enemies group if mistakenly included
+            try { if (this.enemies && this.enemies.contains && this.enemies.contains(s)) this.enemies.remove(s, false, false); } catch (e) {}
+            // Collide with ground
+            try {
+                if (!this._playerColliders) this._playerColliders = [];
+                this._playerColliders.push(this.physics.add.collider(s, this.groundGroup));
+            } catch (e) {}
+            // Rebind projectile->player overlaps
+            try {
+                if (!this._projPlayerOverlaps) this._projPlayerOverlaps = [];
+                this._projPlayerOverlaps.forEach(c => { try { this.physics.world.removeCollider(c); } catch (e) {} });
+                this._projPlayerOverlaps.length = 0;
+                this._projPlayerOverlaps.push(this.physics.add.overlap(this.projectiles, this.players[0].sprite, (a, b) => this.handleProjectilePlayerOverlap(a, b, 0)));
+                this._projPlayerOverlaps.push(this.physics.add.overlap(this.projectiles, this.players[1].sprite, (a, b) => this.handleProjectilePlayerOverlap(a, b, 1)));
+            } catch (e) {}
+            // Rebind boss spikes overlap
+            try {
+                if (this._bossSpikesOverlap) { this.physics.world.removeCollider(this._bossSpikesOverlap); this._bossSpikesOverlap = null; }
+                if (this.bossSpikes && this.players[0].sprite) {
+                    this._bossSpikesOverlap = this.physics.add.overlap(this.bossSpikes, this.players[0].sprite, (spike, sprite) => {
+                        try { spike.destroy(); } catch (e) {}
+                        this.applyDamageToPlayer(0, 70);
+                    });
+                }
+            } catch (e) {}
+            // Bring visuals to top
+            try { if (this.children && this.children.bringToTop) this.children.bringToTop(s); } catch (e) {}
+            if (this.reticle) {
+                try { if (this.children && this.children.bringToTop) this.children.bringToTop(this.reticle); } catch (e) {}
+                try { if (this.reticle.setDepth) this.reticle.setDepth(11); } catch (e) {}
+            }
+        } catch (e) { /* ignore */ }
+    }
+
     // Energy helpers: support a shared pool in cooperative mode
     getEnergy(player) {
         if (this.mode === 'cooperativo') return (this.sharedEnergy != null) ? this.sharedEnergy : 0;
@@ -817,8 +887,13 @@ class GameScene extends Phaser.Scene {
 
     create() {
         const { width, height } = this.scale;
-        // Fullscreen on start
-        this.scale.startFullscreen();
+        // Try fullscreen on start (may be rejected if not user-gesture). Swallow promise rejection.
+        try {
+            const fs = this.scale && this.scale.startFullscreen ? this.scale.startFullscreen() : null;
+            if (fs && typeof fs.then === 'function' && typeof fs.catch === 'function') {
+                fs.catch(err => { /* ignore permission errors like "not granted" */ });
+            }
+        } catch (e) { /* ignore fullscreen errors */ }
 
         // Background map image (if selected) - always try to show it: if not loaded, load it at runtime
         if (this.selectedMap === 'Mapa 1') {
@@ -921,6 +996,8 @@ class GameScene extends Phaser.Scene {
     const p2KeyBase = `char${this.player2Index}_idle`;
     const p1Sprite = this.physics.add.sprite(200, height - 150, p1KeyBase).setCollideWorldBounds(true);
     const p2Sprite = this.physics.add.sprite(width - 200, height - 150, p2KeyBase).setCollideWorldBounds(true);
+    // Ensure players render above enemies/boss/spikes (boss depth=5, spikes=4)
+    try { p1Sprite.setDepth(8); p2Sprite.setDepth(8); } catch (e) {}
 
         [p1Sprite, p2Sprite].forEach(s => {
             s.setBounce(0.05);
@@ -1014,6 +1091,9 @@ class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.players[0].sprite, this.groundGroup);
     // If coop mode, share the same sprite between players and create reticle
     if (this.mode === 'cooperativo') {
+        // Hide and disable the original p2Sprite since we'll use p1's sprite
+        p2Sprite.setVisible(false);
+        p2Sprite.setActive(false);
         // Make player2 reference the same sprite as player1
         this.players[1].sprite = this.players[0].sprite;
         // Create a reticle that orbits around the single player
@@ -1025,13 +1105,14 @@ class GameScene extends Phaser.Scene {
             }
             this.physics.add.existing(this.reticle);
             if (this.reticle.body) this.reticle.body.setAllowGravity(false);
+            try { this.reticle.setDepth(11); } catch (e) {}
         } catch (e) { /* ignore */ }
     } else {
         this.physics.add.collider(this.players[1].sprite, this.groundGroup);
     }
 
-        // Projectiles group
-        this.projectiles = this.physics.add.group();
+    // Projectiles group (sin gravedad por defecto)
+    this.projectiles = this.physics.add.group({ allowGravity: false });
 
         // Projectile -> players overlap
         this.physics.add.overlap(
@@ -1082,12 +1163,194 @@ class GameScene extends Phaser.Scene {
             hit: "K", block: "L", charge: "O", shoot: "P"
         });
 
+        // DEBUG: tecla T salta directo al jefe final en modo cooperativo
+        try {
+            this.input.keyboard.on('keydown-T', () => {
+                if (this.mode !== 'cooperativo') return;
+                // cancelar futuros spawns de oleadas
+                this._cancelWaveSpawns = true;
+                // limpiar enemigos y proyectiles enemigos actuales
+                try { if (this.enemies) this.enemies.clear(true, true); } catch (e) {}
+                try { if (this.enemyProjectiles) this.enemyProjectiles.clear(true, true); } catch (e) {}
+                // preparar estado para jefe
+                this.currentWave = this.maxWaves;
+                this.waveActive = false;
+                this.waveCompleted = true;
+                if (this.boss) { try { this.boss.destroy(); } catch (e) {} }
+                this.boss = null; this.bossActive = false;
+                if (this.waveText && this.waveText.setText) this.waveText.setText('¡Jefe final! (debug)');
+                // Saneamiento: asegurar sprite válido/activo y rebind de overlaps
+                try { this.ensurePlayerSpriteValid(); if (this.physics && this.physics.world && this.physics.world.isPaused) this.physics.resume(); } catch (ee) { /* ignore */ }
+                // spawn boss inmediatamente
+                this.spawnBoss();
+            });
+        } catch (e) { /* ignore debug key errors */ }
+
         // Gamepad connect listener: initialize flags
         this.input.gamepad.on('connected', pad => {
             pad._leftPressed = pad._rightPressed = false;
             pad._aPressed = pad._bPressed = false;
             pad._lastButtons = [];
         });
+
+        // Sistema de oleadas para modo cooperativo
+        if (this.mode === 'cooperativo') {
+            this.currentWave = 0;
+            this.maxWaves = 5;
+            this.enemies = this.physics.add.group();
+            // Grupo de proyectiles enemigos (sin gravedad por defecto)
+            this.enemyProjectiles = this.physics.add.group({ allowGravity: false });
+            this.waveActive = false;
+            this.waveCompleted = false;
+            // Boss state
+            this.boss = null;
+            this.bossActive = false;
+            this.bossSpikes = this.physics.add.staticGroup();
+            
+            // Configuración de oleadas: número de enemigos por oleada
+            this.waveConfig = [
+                { enemies: 3 },  // Oleada 1
+                { enemies: 5 },  // Oleada 2
+                { enemies: 7 },  // Oleada 3
+                { enemies: 9 },  // Oleada 4
+                { enemies: 12 }  // Oleada 5
+            ];
+            
+            // Texto de oleada
+            this.waveText = this.add.text(this.scale.width / 2, 100, '', {
+                fontSize: '32px',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 4
+            }).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
+            
+            // Iniciar primera oleada después de 2 segundos
+            this.time.delayedCall(2000, () => this.startWave());
+            
+            // Colisiones: proyectiles enemigos con jugador (bloqueables con parry perfecto)
+            this.physics.add.overlap(
+                this.enemyProjectiles,
+                this.players[0].sprite,
+                (a, b) => {
+                    // Determinar el proyectil con seguridad
+                    const proj = (a && a.texture && a.texture.key === 'tex_bullet') ? a : b;
+                    if (!proj || !proj.active) return;
+                    const shooterIndex = 1; // En coop, P2 es el que dispara/parrea
+                    const p = this.players[shooterIndex];
+                    const now = this.time.now;
+                    const parryWindow = 500;
+                    const justBlocked = p.blockPressTime && (now - p.blockPressTime) < parryWindow;
+                    if (p.blocking && justBlocked && !proj.parried) {
+                        proj.parried = true;
+                        proj.damage = (proj.damage || 35) * 2;
+                        proj.isReflected = true;
+                        proj.parryReflected = true;
+                        try { proj.setTint(0xff00ff); } catch (e) {}
+                        this.cameras.main.flash(120, 255, 255, 0);
+                        if (proj.body) {
+                            const vx = proj.body.velocity.x || 0;
+                            const vy = proj.body.velocity.y || 0;
+                            let speed = Math.hypot(vx, vy);
+                            let angle;
+                            if (speed > 10) {
+                                angle = Math.atan2(-vy, -vx);
+                            } else {
+                                const px = this.players[0].sprite.x;
+                                const py = this.players[0].sprite.y;
+                                angle = Phaser.Math.Angle.Between(proj.x, proj.y, px, py) + Math.PI;
+                                speed = 600;
+                            }
+                            const newSpeed = Math.max(500, speed);
+                            const newVx = Math.cos(angle) * newSpeed;
+                            const newVy = Math.sin(angle) * newSpeed;
+                            proj.body.setAllowGravity(false);
+                            if (proj.body.setGravity) proj.body.setGravity(0, 0);
+                            proj.body.setDrag(0, 0);
+                            proj.body.setVelocity(newVx, newVy);
+                            proj.rotation = angle;
+                        }
+                        proj.shooter = shooterIndex;
+                        this.enemyProjectiles.remove(proj, true, false);
+                        this.projectiles.add(proj, true);
+                        if (proj.body) {
+                            // Reasegurar configuración tras cambio de grupo
+                            proj.body.setAllowGravity(false);
+                            if (proj.body.setGravity) proj.body.setGravity(0, 0);
+                            proj.body.setDrag(0, 0);
+                            if (proj.body.velocity.length && proj.body.velocity.length() < 10) {
+                                // Si perdió velocidad, usar su rotación para impulsarlo
+                                const speed = 600;
+                                const ang = proj.rotation || 0;
+                                proj.body.setVelocity(Math.cos(ang) * speed, Math.sin(ang) * speed);
+                            }
+                        }
+                        return; // no continuar con lógica de daño al jugador
+                    }
+                    if (p.blocking) {
+                        this.changeEnergyFor(p, -10);
+                        try { proj.destroy(); } catch (e) {}
+                        return;
+                    }
+                    this.applyDamageToPlayer(0, proj.damage || 35);
+                    try { proj.destroy(); } catch (e) {}
+                }
+            );
+
+            // Colisión: pinchos del jefe con el jugador (no bloqueables)
+            this.physics.add.overlap(this.bossSpikes, this.players[0].sprite, (spike, sprite) => {
+                try { spike.destroy(); } catch(e) {}
+                this.applyDamageToPlayer(0, 70);
+            });
+            
+            // Colisiones: proyectiles del jugador con enemigos (con reflexión para enemigos terrestres)
+            this.physics.add.overlap(this.projectiles, this.enemies, (proj, enemy) => {
+                if (!proj.active || !enemy.active) return;
+
+                // Si el enemigo refleja proyectiles del jugador Y NO es un proyectil de parry, devuélvelo hacia el jugador
+                if (enemy.reflectsProjectiles && !proj.isReflected && !proj.parryReflected) {
+                    proj.isReflected = true;
+                    try { proj.setTint(0x66ccff); } catch (e) { /* visual */ }
+
+                    const playerSprite = this.players[0] && this.players[0].sprite;
+                    if (playerSprite && proj.body) {
+                        const ang = Phaser.Math.Angle.Between(enemy.x, enemy.y, playerSprite.x, playerSprite.y);
+                        // Mantener la velocidad actual si existe, sino usar 500
+                        const curVx = proj.body.velocity.x || 0;
+                        const curVy = proj.body.velocity.y || 0;
+                        const curSpeed = Math.max(300, Math.hypot(curVx, curVy));
+                        proj.body.setVelocity(Math.cos(ang) * curSpeed, Math.sin(ang) * curSpeed);
+                        proj.rotation = ang;
+                        // Asegurar que no se trate como fuego amigo
+                        proj.shooter = -1;
+                    }
+                    // No dañar al enemigo
+                    return;
+                }
+
+                // Si el proyectil fue reflejado por parry, siempre daña al enemigo (ignora reflexión enemiga)
+                let damage = proj.damage || 20;
+                if (proj.parryReflected) {
+                    // Proyectil de parry perfecto: siempre hace daño completo y doble
+                    damage = proj.damage; // Ya tiene el daño duplicado
+                    console.log('Parry hit enemy with damage:', damage);
+                }
+                if (enemy === this.boss) {
+                    enemy.health -= damage;
+                    console.log('Boss health after parry hit:', enemy.health);
+                } else {
+                    enemy.health -= damage;
+                    console.log('Enemy health after parry hit:', enemy.health);
+                }
+                proj.destroy();
+
+                if (enemy.health <= 0) {
+                    if (enemy.healthBar) enemy.healthBar.destroy();
+                    if (enemy.healthBarBg) enemy.healthBarBg.destroy();
+                    enemy.destroy();
+                    this.checkWaveComplete();
+                }
+            });
+        }
 
     // small camera shake on hit
     // background color removed to allow map background to show
@@ -1103,6 +1366,13 @@ class GameScene extends Phaser.Scene {
         const target = this.players[hitPlayerIndex];
         if (!target) { if (!proj.piercing) proj.destroy(); return; }
 
+        // Bloqueo: si el jugador está bloqueando, anula el impacto (aplica pequeño coste de energía)
+        if (target.blocking) {
+            this.changeEnergyFor(target, -10);
+            if (!proj.piercing) proj.destroy();
+            return;
+        }
+
         const damage = (proj.damage != null) ? proj.damage : 20;
 
         // In cooperative mode, avoid damaging the shared player (friendly fire)
@@ -1116,7 +1386,7 @@ class GameScene extends Phaser.Scene {
             }
         }
 
-        // Delegate damage handling to central helper (handles secondary HP in coop)
+    // Delegate damage handling to central helper (handles secondary HP in coop)
         this.applyDamageToPlayer(hitPlayerIndex, damage);
 
         if (!proj.piercing) proj.destroy();
@@ -1132,6 +1402,8 @@ class GameScene extends Phaser.Scene {
         } else {
             return; // Ninguno es proyectil, no hacer nada
         }
+        // Si es un proyectil reflejado por parry, ignorar colisión con jugadores
+        if (proj && proj.parryReflected) return;
         this.onProjectileHit(proj, hitPlayerIndex);
     }
 
@@ -1169,6 +1441,22 @@ class GameScene extends Phaser.Scene {
     }
 
     update(time) {
+        // Update enemies in cooperative mode
+        if (this.mode === 'cooperativo') {
+            this.updateEnemies(time);
+            this.updateBoss(time);
+        }
+        // Track last known player position and reinforce sprite validity during boss phase
+        try {
+            if (this.players && this.players[0] && this.players[0].sprite) {
+                this._lastPlayerX = this.players[0].sprite.x;
+                this._lastPlayerY = this.players[0].sprite.y;
+            }
+            if (this.bossActive) {
+                this.ensurePlayerSpriteValid();
+            }
+        } catch (e) { /* ignore */ }
+
         for (let i = 0; i < 2; i++) {
             // Si está siendo golpeado, verifica si ya terminó el stun
             if (this.players[i].beingHit && time > this.players[i].hitTimer) {
@@ -1194,6 +1482,10 @@ class GameScene extends Phaser.Scene {
                 const p0 = this.players[0];
                 if (p0 && (p0.secondHealth || 0) <= 0) {
                     this._gameOverCooldownUntil = now + 1000;
+                    // Limpiar barras de vida del jefe si existen
+                    if (this.bossHealthBarBg) { this.bossHealthBarBg.destroy(); this.bossHealthBarBg = null; }
+                    if (this.bossHealthBar) { this.bossHealthBar.destroy(); this.bossHealthBar = null; }
+                    if (this.bossHealthText) { this.bossHealthText.destroy(); this.bossHealthText = null; }
                     // treat player 1 as loser for payload; in coop both lose
                     try {
                         this.scene.launch('GameOver', {
@@ -1306,6 +1598,20 @@ class GameScene extends Phaser.Scene {
 
         const pad = getPad(player.padIndex, this);
 
+        // CARGA DE ENERGÍA COOPERATIVA: verificar si ambos jugadores están bloqueando con A
+        if (this.mode === 'cooperativo') {
+            const p1 = this.players[0];
+            const p2 = this.players[1];
+            const p1Pad = getPad(p1.padIndex, this);
+            const p2Pad = getPad(p2.padIndex, this);
+            const p1Block = p1Pad && p1Pad.connected && p1Pad.buttons[0] && p1Pad.buttons[0].pressed;
+            const p2Block = p2Pad && p2Pad.connected && p2Pad.buttons[0] && p2Pad.buttons[0].pressed;
+            if (p1Block && p2Block) {
+                // Ambos están bloqueando con A: recargar energía
+                this.changeEnergyFor(player, 2.0);
+            }
+        }
+
         // CO-OP: player index 1 does not move the shared character; they control the reticle and shooting
         // If the main player is immobilized (secondary HP depleted state), they can't move or charge
         if (this.mode === 'cooperativo' && player.immobilized && i === 0) {
@@ -1315,14 +1621,11 @@ class GameScene extends Phaser.Scene {
             return;
         }
         if (this.mode === 'cooperativo' && i === 1) {
-            // P2 controls the reticle and charges/shoots from the shared shooter (player 0).
-            // All charged-shot logic is handled here so P2 is the authority for charging.
+            // P2 puede disparar rápido y cargado solo con X (2) del gamepad, nunca con otro botón ni teclado
             if (!this.reticle) return;
-
             const shooter = this.players[0];
-            const coopPlayer = player; // alias for clarity (player 1)
+            const coopPlayer = player;
             const dead = 0.15; const maxDist = 300;
-
             if (pad && pad.connected) {
                 const ax = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
                 const ay = (pad.axes.length > 1) ? pad.axes[1].getValue() : 0;
@@ -1330,58 +1633,28 @@ class GameScene extends Phaser.Scene {
                     this.reticle.x = shooter.sprite.x + ax * maxDist;
                     this.reticle.y = shooter.sprite.y + ay * maxDist;
                 }
-
                 if (!pad._lastButtons) pad._lastButtons = [];
                 const btn = pad.buttons;
-                // Button mapping fallbacks: B (1) quick-tap, X (2) charge-hold preferred, A (0) also accepted for charge as fallback
+                
+                // DETECCIÓN DE PARRY PARA P2: registrar cuando presiona A (botón 0) para bloquear
+                const blockPressed = btn[0] && btn[0].pressed;
+                if (blockPressed && !coopPlayer.wasBlocking) {
+                    coopPlayer.blockPressTime = this.time.now;
+                    coopPlayer.wasBlocking = true;
+                    coopPlayer.blocking = true;
+                } else if (!blockPressed) {
+                    coopPlayer.wasBlocking = false;
+                    coopPlayer.blocking = false;
+                }
+                
+                // Disparo rápido con B (1) y disparo cargado con X (2) del gamepad
                 const quickPressed = btn[1] && btn[1].pressed && !pad._lastButtons[1];
-                const chargeHeld = (btn[2] && btn[2].pressed) || (btn[0] && btn[0].pressed);
-                const chargeReleased = ((!btn[2] || !btn[2].pressed) && pad._lastButtons[2]) || ((!btn[0] || !btn[0].pressed) && pad._lastButtons[0]);
+                const chargeHeld = btn[2] && btn[2].pressed;
+                const chargeReleased = (!btn[2] || !btn[2].pressed) && pad._lastButtons[2];
                 pad._lastButtons = btn.map(b => !!b.pressed);
-
-                // CHARGE: hold to accumulate using shared energy (P2 is authority), release to fire one charged projectile from shooter -> reticle
+                
+                // Disparo cargado
                 if (chargeHeld && this.getEnergy(coopPlayer) > 0) {
-                    if (!coopPlayer.chargingShot) { coopPlayer.chargingShot = true; coopPlayer.chargeAmount = 0; coopPlayer.chargeStart = time; }
-                    const dt = this.game.loop.delta / 1000;
-                    const energyRate = 160; // energy per second consumed while charging
-                    const consume = Math.min(this.getEnergy(coopPlayer), energyRate * dt);
-                    this.changeEnergyFor(coopPlayer, -consume);
-                    coopPlayer.chargeAmount = (coopPlayer.chargeAmount || 0) + consume;
-                    try { if (this.reticle) this.reticle.setScale(1 + Math.min(1.2, coopPlayer.chargeAmount / 240)); } catch (e) {}
-                }
-
-                if (chargeReleased && coopPlayer.chargingShot) {
-                    // compute damage in discrete steps: every 25 energy -> +3 damage
-                    const baseDamage = 20;
-                    const steps = Math.floor((coopPlayer.chargeAmount || 0) / 25);
-                    const damage = baseDamage + (steps * 3);
-                    coopPlayer.chargingShot = false; coopPlayer.chargeAmount = 0; coopPlayer.chargeStart = 0;
-                    try { if (this.reticle) this.reticle.setScale(1); } catch (e) {}
-                    if ((time - shooter.lastShot) > shooter.shotCD) { // charged shot can be fired as long as coopPlayer had energy while charging
-                        shooter.lastShot = time;
-                        this.spawnProjectile(0, damage);
-                    }
-                }
-
-                // QUICK TAP: free basic shot from shooter aimed at reticle
-                if (quickPressed) {
-                    if ((time - shooter.lastShot) > shooter.shotCD) {
-                        shooter.lastShot = time;
-                        this.spawnProjectile(0, 20);
-                    }
-                }
-            } else {
-                // keyboard fallback: arrow keys to nudge reticle; 'O' is charge (hold), 'P' is quick tap
-                if (this.keysP2.left.isDown) this.reticle.x -= 4;
-                if (this.keysP2.right.isDown) this.reticle.x += 4;
-                if (this.keysP2.up.isDown) this.reticle.y -= 4;
-                if (this.keysP2.down.isDown) this.reticle.y += 4;
-
-                const chargeHeldKB = this.keysP2.charge.isDown;
-                const chargeReleasedKB = Phaser.Input.Keyboard.JustUp(this.keysP2.charge);
-                const quickKB = Phaser.Input.Keyboard.JustDown(this.keysP2.shoot);
-
-                if (chargeHeldKB && this.getEnergy(coopPlayer) > 0) {
                     if (!coopPlayer.chargingShot) { coopPlayer.chargingShot = true; coopPlayer.chargeAmount = 0; coopPlayer.chargeStart = time; }
                     const dt = this.game.loop.delta / 1000;
                     const energyRate = 160;
@@ -1390,22 +1663,44 @@ class GameScene extends Phaser.Scene {
                     coopPlayer.chargeAmount = (coopPlayer.chargeAmount || 0) + consume;
                     try { if (this.reticle) this.reticle.setScale(1 + Math.min(1.2, coopPlayer.chargeAmount / 240)); } catch (e) {}
                 }
-
-                if (chargeReleasedKB && coopPlayer.chargingShot) {
+                
+                // Al soltar el botón X, disparar el disparo cargado
+                if (chargeReleased && coopPlayer.chargingShot && coopPlayer.chargeAmount > 0) {
                     const baseDamage = 20;
                     const steps = Math.floor((coopPlayer.chargeAmount || 0) / 25);
                     const damage = baseDamage + (steps * 3);
-                    coopPlayer.chargingShot = false; coopPlayer.chargeAmount = 0; coopPlayer.chargeStart = 0;
                     try { if (this.reticle) this.reticle.setScale(1); } catch (e) {}
-                    if ((time - shooter.lastShot) > shooter.shotCD) { shooter.lastShot = time; this.spawnProjectile(0, damage); }
+                    if ((time - shooter.lastShot) > shooter.shotCD) {
+                        shooter.lastShot = time;
+                        this.spawnProjectile(0, damage);
+                    }
+                    coopPlayer.chargingShot = false; 
+                    coopPlayer.chargeAmount = 0; 
+                    coopPlayer.chargeStart = 0;
                 }
-
-                if (quickKB) {
-                    if ((time - shooter.lastShot) > shooter.shotCD) { shooter.lastShot = time; this.spawnProjectile(0, 20); }
+                
+                // Si no está cargando, resetear
+                if (!chargeHeld && !chargeReleased) {
+                    coopPlayer.chargingShot = false;
+                    coopPlayer.chargeAmount = 0;
                 }
+                
+                // Disparo rápido
+                if (quickPressed) {
+                    if ((time - shooter.lastShot) > shooter.shotCD) {
+                        shooter.lastShot = time;
+                        this.spawnProjectile(0, 20);
+                    }
+                }
+            } else {
+                // Solo permitir mover la retícula con teclado, pero NO disparar ni cargar con teclado
+                if (this.keysP2.left.isDown) this.reticle.x -= 4;
+                if (this.keysP2.right.isDown) this.reticle.x += 4;
+                if (this.keysP2.up.isDown) this.reticle.y -= 4;
+                if (this.keysP2.down.isDown) this.reticle.y += 4;
+                coopPlayer.chargingShot = false;
+                coopPlayer.chargeAmount = 0;
             }
-
-            // reticle-only controller should not move the shared player sprite
             return;
         }
 
@@ -1425,7 +1720,10 @@ class GameScene extends Phaser.Scene {
             // B (btn 1) => Shoot
             // X (btn 2) => Punch
             if (btn[2] && btn[2].pressed && !pad._lastButtons[2]) punch = true; // X stays punch
-            if (btn[1] && btn[1].pressed && !pad._lastButtons[1]) shoot = true; // B becomes shoot
+            // En modo cooperativo, P1 no puede disparar
+            if (!(this.mode === 'cooperativo' && i === 0)) {
+                if (btn[1] && btn[1].pressed && !pad._lastButtons[1]) shoot = true; // B becomes shoot
+            }
             blockOrCharge = btn[0] && btn[0].pressed; // A becomes block/charge
             pad._lastButtons = btn.map(b => !!b.pressed);
         }
@@ -1437,14 +1735,20 @@ class GameScene extends Phaser.Scene {
             if (Phaser.Input.Keyboard.JustDown(this.keysP1.up)) up = true;
             if (Phaser.Input.Keyboard.JustDown(this.keysP1.hit)) punch = true;
             blockOrCharge = blockOrCharge || this.keysP1.block.isDown; // Usar solo C para bloquear/cargar
-            if (Phaser.Input.Keyboard.JustDown(this.keysP1.shoot)) shoot = true;
+            // En modo cooperativo, P1 no puede disparar
+            if (!(this.mode === 'cooperativo' && i === 0)) {
+                if (Phaser.Input.Keyboard.JustDown(this.keysP1.shoot)) shoot = true;
+            }
         } else {
             left = left || this.keysP2.left.isDown;
             right = right || this.keysP2.right.isDown;
             if (Phaser.Input.Keyboard.JustDown(this.keysP2.up)) up = true;
             if (Phaser.Input.Keyboard.JustDown(this.keysP2.hit)) punch = true;
             blockOrCharge = blockOrCharge || this.keysP2.block.isDown; // Usar solo L para bloquear/cargar
-            if (Phaser.Input.Keyboard.JustDown(this.keysP2.shoot)) shoot = true;
+            // En modo cooperativo, P2 no puede disparar con teclado
+            if (!(this.mode === 'cooperativo' && i === 1)) {
+                if (Phaser.Input.Keyboard.JustDown(this.keysP2.shoot)) shoot = true;
+            }
         }
 
         // --- NUEVO: Si está bloqueando o cargando, no puede hacer nada más ---
@@ -1454,13 +1758,24 @@ class GameScene extends Phaser.Scene {
         const chargeDistance = 140; // Si está a más de 140px, puede cargar
 
         if (blockOrCharge) {
+            // Registrar tiempo cuando se presiona bloquear por primera vez (para parry perfecto)
+            // En modo cooperativo: solo el P2 (que dispara con gamepad) puede hacer parry
+            // En modo versus: ambos pueden bloquear normalmente
+            const isShooterInCoop = (this.mode === 'cooperativo' && i === 1); // P2 dispara en coop
+            if ((isShooterInCoop || this.mode !== 'cooperativo') && !player.wasBlocking) {
+                player.blockPressTime = this.time.now;
+                player.wasBlocking = true;
+            }
+            
             const charIndexLocal = charIndex;
             if (dist > chargeDistance) {
                 // Cargar energía (lejos)
                 player.blocking = false;
                 sprite.setTint(0x2222cc); // Color para cargar
-                // Use shared energy helper so coop mode updates the shared pool
-                this.changeEnergyFor(player, 2.0); // Carga más rápida
+                // En modo versus, cargar normalmente. En coop, ya se maneja al inicio
+                if (this.mode !== 'cooperativo') {
+                    this.changeEnergyFor(player, 2.0);
+                }
                 // intentar usar la textura específica de carga y mostrar frame 1
                 const chargeKey = `char${charIndexLocal}_charge`;
                 if (this.textures.exists(chargeKey)) {
@@ -1485,6 +1800,7 @@ class GameScene extends Phaser.Scene {
             return;
             } else {
             player.blocking = false;
+            player.wasBlocking = false; // Reset para detectar próxima pulsación
             // restaurar colores originales y textura/frame por defecto
             if (sprite.clearTint) sprite.clearTint();
             const idleKey = `char${charIndex}_idle`;
@@ -1611,8 +1927,15 @@ class GameScene extends Phaser.Scene {
         const sy = shooter.sprite.y - 10;
 
         const proj = this.physics.add.sprite(sx, sy, this.textures.exists('tex_bullet') ? 'tex_bullet' : 'tex_bullet');
-    proj.shooter = i;
-    if (explicitDamage != null) proj.damage = explicitDamage;
+        proj.shooter = i;
+        if (explicitDamage != null) {
+            proj.damage = explicitDamage;
+            // Si el daño es mayor a 20 (disparo cargado), hacer el proyectil más grande
+            if (explicitDamage > 20) {
+                const scale = 1 + Math.min(2.5, (explicitDamage - 20) / 30);
+                proj.setScale(scale);
+            }
+        }
 
         // Ensure shoot animation plays immediately for feedback
         const shooterChar = (i === 0) ? this.player1Index : this.player2Index;
@@ -1645,14 +1968,65 @@ class GameScene extends Phaser.Scene {
     }
 
     doPunch(i) {
-        // In cooperative mode we don't allow PvP punches
-        if (this.mode === 'cooperativo') return;
         const attacker = this.players[i];
         const target = this.players[1 - i];
+        
+        // Siempre reproducir animación de puñetazo
+        const attChar = (i === 0) ? this.player1Index : this.player2Index;
+        const atkPunchKey = `char${attChar}_punch`;
+        if (this.anims.exists(atkPunchKey)) {
+            try { attacker.sprite.anims.play(atkPunchKey, true); } catch (e) { }
+        } else if (this.textures.exists(atkPunchKey)) {
+            try { attacker.sprite.setTexture(atkPunchKey); attacker.sprite.setFrame(0); } catch (e) { }
+        }
+
+        // En modo cooperativo, golpear enemigos en lugar de PvP
+        if (this.mode === 'cooperativo') {
+            if (!this.enemies) return;
+            
+            // Buscar enemigos cercanos
+            const hitRange = 150;
+            this.enemies.children.entries.forEach(enemy => {
+                if (!enemy.active) return;
+                
+                const dist = Phaser.Math.Distance.Between(attacker.sprite.x, attacker.sprite.y, enemy.x, enemy.y);
+                
+                if (dist < hitRange) {
+                    // Aplicar daño al enemigo
+                    const damage = 50;
+                    enemy.health -= damage;
+                    
+                    // Efecto visual: empujar al enemigo
+                    const dir = (enemy.x > attacker.sprite.x) ? 1 : -1;
+                    enemy.setVelocityX(300 * dir);
+                    enemy.setVelocityY(-100);
+                    
+                    // Destruir enemigo si su vida llega a 0
+                    if (enemy.health <= 0) {
+                        if (enemy.healthBar) enemy.healthBar.destroy();
+                        if (enemy.healthBarBg) enemy.healthBarBg.destroy();
+                        enemy.destroy();
+                        this.checkWaveComplete();
+                    }
+                }
+            });
+            return;
+        }
+
+        // Modo versus: lógica PvP original
         const dist = Phaser.Math.Distance.Between(attacker.sprite.x, attacker.sprite.y, target.sprite.x, target.sprite.y);
 
-        // Solo cuenta como golpe si el objetivo NO está siendo golpeado
-        if (dist < 90 && !target.beingHit) {
+        // Efecto imán: si el enemigo está cerca (menos de 150px), mover al atacante hacia él
+        const magnetRange = 150;
+        if (dist < magnetRange && dist > 0) {
+            const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
+            const magnetForce = 300; // Velocidad del imán
+            attacker.sprite.setVelocityX(magnetForce * dir);
+        }
+
+        // Solo aplicar daño si está lo suficientemente cerca (después del imán)
+        const hitRange = 90;
+        if (dist < hitRange && !target.beingHit) {
             // Si Charles está transformado
             const isCharlesTrans = attacker.transformed && ((i === 0 && this.player1Index === 0) || (i === 1 && this.player2Index === 0));
             if (!target.blocking) {
@@ -1687,13 +2061,513 @@ class GameScene extends Phaser.Scene {
             target.hitTimer = this.time.now + 400;
             const dir = (target.sprite.x > attacker.sprite.x) ? 1 : -1;
             attacker.sprite.setVelocityX(120 * dir);
-            // Play punch animation immediately
-            const attChar = (i === 0) ? this.player1Index : this.player2Index;
-            const atkPunchKey = `char${attChar}_punch`;
-            if (this.anims.exists(atkPunchKey)) {
-                try { attacker.sprite.anims.play(atkPunchKey, true); } catch (e) { }
-            } else if (this.textures.exists(atkPunchKey)) {
-                try { attacker.sprite.setTexture(atkPunchKey); attacker.sprite.setFrame(0); } catch (e) { }
+        }
+    }
+
+    // Sistema de oleadas para modo cooperativo
+    startWave() {
+        if (this.currentWave >= this.maxWaves) {
+            this.waveText.setText('¡Victoria! Todas las oleadas completadas');
+            return;
+        }
+        
+        this.currentWave++;
+        this.waveActive = true;
+        this.waveCompleted = false;
+        
+        const config = this.waveConfig[this.currentWave - 1];
+        this.waveText.setText(`Oleada ${this.currentWave}/${this.maxWaves}`);
+        
+        // Crear mezcla de enemigos: alterna voladores y terrestres
+        for (let i = 0; i < config.enemies; i++) {
+            this.time.delayedCall(i * 800, () => {
+                if (i % 2 === 0) this.spawnFlyingEnemy();
+                else this.spawnGroundEnemy();
+            });
+        }
+    }
+
+    spawnFlyingEnemy() {
+        if (this._cancelWaveSpawns) return; // debug: no spawns when jumping to boss
+        const width = this.scale.width;
+        const height = this.scale.height;
+        
+        // Spawn en posiciones aleatorias del borde superior o lateral
+        const spawnSide = Phaser.Math.Between(0, 2);
+        let x, y;
+        
+        if (spawnSide === 0) { // Arriba
+            x = Phaser.Math.Between(100, width - 100);
+            y = 50;
+        } else if (spawnSide === 1) { // Izquierda
+            x = 50;
+            y = Phaser.Math.Between(100, height - 200);
+        } else { // Derecha
+            x = width - 50;
+            y = Phaser.Math.Between(100, height - 200);
+        }
+        
+        // Crear sprite del enemigo más grande
+        const enemy = this.physics.add.sprite(x, y, 'tex_bullet');
+        enemy.setTint(0xff0000); // Color rojo para distinguir
+        enemy.setScale(3.5); // Aumentado de 1.5 a 3.5
+        
+        // Propiedades del enemigo
+        // Vida para aguantar ~4 disparos (20 daño c/u) y ~3 golpes (50 daño c/u)
+        enemy.health = 180; // 4 disparos = 80, 3 golpes = 150, promedio ~180
+        enemy.maxHealth = 180;
+        enemy.lastShot = 0;
+        enemy.shotCooldown = 4000; // Aumentado de 2000 a 4000ms (dispara cada 4 segundos)
+        enemy.moveSpeed = 60; // Reducido de 100 a 60
+        enemy.isFlying = true;
+        
+        this.enemies.add(enemy);
+        enemy.body.setAllowGravity(false);
+        enemy.setCollideWorldBounds(true);
+        
+        // Crear barra de vida del enemigo
+        enemy.healthBarBg = this.add.rectangle(enemy.x, enemy.y - 30, 50, 6, 0x000000).setDepth(6);
+        enemy.healthBar = this.add.rectangle(enemy.x, enemy.y - 30, 50, 6, 0xff0000).setDepth(7);
+        
+        // Colisión con plataformas
+        this.physics.add.collider(enemy, this.groundGroup);
+        
+        // Movimiento aleatorio más lento
+        this.tweens.add({
+            targets: enemy,
+            x: Phaser.Math.Between(100, width - 100),
+            y: Phaser.Math.Between(100, height - 200),
+            duration: 5000, // Aumentado de 3000 a 5000ms (más lento)
+            ease: 'Sine.inOut',
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    // Enemigo terrestre que persigue, salta y refleja proyectiles del jugador
+    spawnGroundEnemy() {
+        if (this._cancelWaveSpawns) return; // debug: no spawns when jumping to boss
+        const width = this.scale.width;
+        const height = this.scale.height;
+
+        // Aparece desde arriba, cerca de las plataformas superiores
+        const side = Phaser.Math.Between(0, 1);
+        const x = (side === 0) ? 200 : width - 200;
+        const y = height * 0.3; // Spawn desde arriba para que caiga sobre las plataformas
+
+        const enemy = this.physics.add.sprite(x, y, 'tex_bullet');
+        enemy.setTint(0x33cc33); // Verde para diferenciar
+        enemy.setScale(2.6);
+
+        // Propiedades
+        enemy.type = 'ground';
+        enemy.health = 220; // un poco más tanque que el volador
+        enemy.maxHealth = 220;
+        enemy.moveSpeed = 90;
+        enemy.jumpSpeed = -420;
+        enemy.lastMelee = 0;
+        // Aumentar cooldown de ataque cuerpo a cuerpo para evitar stunlock
+        enemy.meleeCooldown = 1400;
+        enemy.reflectsProjectiles = true;
+        enemy.lastJump = 0;
+        enemy.jumpCooldown = 500;
+
+        this.enemies.add(enemy);
+        enemy.body.setAllowGravity(true);
+        enemy.setCollideWorldBounds(true);
+
+        // Crear barra de vida del enemigo
+        enemy.healthBarBg = this.add.rectangle(enemy.x, enemy.y - 30, 50, 6, 0x000000).setDepth(6);
+        enemy.healthBar = this.add.rectangle(enemy.x, enemy.y - 30, 50, 6, 0x33cc33).setDepth(7);
+
+        // Colisión con plataformas
+        this.physics.add.collider(enemy, this.groundGroup);
+    }
+
+    // Jefe final: rectángulo grande con 3 ataques
+    spawnBoss() {
+        if (this.boss || this.bossActive) return;
+        // Asegurar que el jugador está operativo al entrar al jefe
+        try {
+            this.ensurePlayerSpriteValid();
+        } catch (e) { /* ignore */ }
+        const width = this.scale.width;
+        const height = this.scale.height;
+
+        // Crear rectángulo pequeño como placeholder del jefe
+        const boss = this.add.rectangle(width * 0.5, height * 0.3, 60, 90, 0x7a00ff);
+        boss.setDepth(5);
+        boss.setOrigin(0.5);
+        
+        this.physics.add.existing(boss);
+        boss.body.setAllowGravity(true);
+        boss.body.setCollideWorldBounds(true);
+        boss.body.setSize(60, 90); // Asegurar el tamaño del body
+        boss.body.setEnable(true); // Asegurar que el body esté activo
+        
+        this.physics.add.collider(boss, this.groundGroup);
+
+        // Propiedades del jefe (usar setData para que Phaser las preserve correctamente)
+        boss.setData('health', 1000);
+        boss.setData('maxHealth', 1000);
+        boss.setData('moveSpeed', 80);
+        boss.setData('lastShot', 0);
+        boss.setData('shotCooldown', 3500); // Disparar cada 3.5 segundos
+        boss.setData('lastAreaAttack', 0);
+        boss.setData('areaAttackCooldown', 8000); // Ataque de área cada 8 segundos
+
+        this.boss = boss;
+        this.bossActive = true;
+        this.waveText.setText('¡Jefe Final!');
+
+        // Crear barra de vida del jefe en la parte inferior
+        const barWidth = 600;
+        const barHeight = 30;
+        const barX = width / 2;
+        const barY = height - 50;
+        
+        this.bossHealthBarBg = this.add.rectangle(barX, barY, barWidth, barHeight, 0x000000).setDepth(100);
+        this.bossHealthBar = this.add.rectangle(barX, barY, barWidth, barHeight, 0xff0066).setDepth(101);
+        this.bossHealthText = this.add.text(barX, barY, 'JEFE: 1000/1000', {
+            fontSize: '20px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(102);
+
+        // Daño de proyectiles del jugador al jefe
+        this.bossOverlap = this.physics.add.overlap(this.projectiles, boss, (proj, b) => {
+            if (!proj || !proj.active) return;
+            
+            // IMPORTANTE: Usar this.boss (el Rectangle) en lugar del parámetro b (el ArcadeSprite wrapper)
+            const bossTarget = this.boss;
+            if (!bossTarget) return;
+            
+            // Obtener health usando getData del Rectangle original
+            let currentHealth = bossTarget.getData('health');
+            const maxHealth = bossTarget.getData('maxHealth') || 1000;
+            
+            console.log('BOSS DAMAGE - Current health:', currentHealth, 'Max health:', maxHealth);
+            
+            // Asegurar que el boss tiene vida inicializada
+            if (typeof currentHealth !== 'number') {
+                currentHealth = maxHealth;
+                bossTarget.setData('health', currentHealth);
+                bossTarget.setData('maxHealth', maxHealth);
+            }
+            
+            const damage = proj.damage || 20;
+            const newHealth = Math.max(0, currentHealth - damage);
+            bossTarget.setData('health', newHealth);
+            
+            console.log('BOSS HIT! Health:', currentHealth, '->', newHealth, 'Damage:', damage);
+            
+            // Efecto visual de impacto
+            const flash = this.add.circle(proj.x, proj.y, 15, 0xff6600, 0.8).setDepth(10);
+            this.tweens.add({
+                targets: flash,
+                alpha: 0,
+                scale: 2,
+                duration: 300,
+                onComplete: () => { try { flash.destroy(); } catch (e) {} }
+            });
+            
+            try { proj.destroy(); } catch (e) {}
+        });
+        
+        // Daño de ataques cuerpo a cuerpo del jugador al jefe
+        const playerSprite = this.players[0] && this.players[0].sprite;
+        if (playerSprite) {
+            this.bossPlayerOverlap = this.physics.add.overlap(playerSprite, boss, (player, b) => {
+                // Solo hacer daño cuando el jugador está atacando (animación punch)
+                const p0 = this.players[0];
+                if (!p0 || !p0.isAttacking) return;
+                
+                // Cooldown para evitar daño múltiple en un solo ataque
+                const now = this.time.now;
+                if (p0._lastBossMeleeHit && now - p0._lastBossMeleeHit < 500) return;
+                p0._lastBossMeleeHit = now;
+                
+                const bossTarget = this.boss;
+                if (!bossTarget) return;
+                
+                let currentHealth = bossTarget.getData('health');
+                const maxHealth = bossTarget.getData('maxHealth') || 1000;
+                
+                if (typeof currentHealth !== 'number') {
+                    currentHealth = maxHealth;
+                    bossTarget.setData('health', currentHealth);
+                    bossTarget.setData('maxHealth', maxHealth);
+                }
+                
+                const damage = 30; // Daño de melee
+                const newHealth = Math.max(0, currentHealth - damage);
+                bossTarget.setData('health', newHealth);
+                
+                console.log('BOSS MELEE HIT! Health:', currentHealth, '->', newHealth, 'Damage:', damage);
+                
+                // Efecto visual de impacto
+                const flash = this.add.circle(bossTarget.x, bossTarget.y, 20, 0xff3300, 0.8).setDepth(10);
+                this.tweens.add({
+                    targets: flash,
+                    alpha: 0,
+                    scale: 2,
+                    duration: 300,
+                    onComplete: () => { try { flash.destroy(); } catch (e) {} }
+                });
+            });
+        }
+    }
+
+    spawnBossSpikeAt(x, y) {
+        // Crear un pincho estático que dura poco tiempo
+        const spike = this.add.rectangle(x, y + 32, 20, 64, 0xcc0066).setDepth(4);
+        this.physics.add.existing(spike, true); // estático
+        this.bossSpikes.add(spike);
+        // Destruir después de 700ms
+        this.time.delayedCall(700, () => { try { if (spike && spike.scene) spike.destroy(); } catch (e) {} });
+    }
+
+    bossShootAtPlayer() {
+        if (!this.boss || !this.players[0] || !this.players[0].sprite) return;
+        const player = this.players[0].sprite;
+        const b = this.boss;
+        const angle = Phaser.Math.Angle.Between(b.x, b.y, player.x, player.y);
+        const proj = this.physics.add.sprite(b.x, b.y - 40, 'tex_bullet');
+        proj.setTint(0x9933ff);
+        proj.setScale(2.2);
+        proj.damage = 50;
+        this.enemyProjectiles.add(proj);
+        proj.body.setAllowGravity(false);
+        const speed = 460;
+        proj.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+        proj.rotation = angle;
+        this.time.delayedCall(3500, () => { if (proj && proj.active) proj.destroy(); });
+    }
+
+    updateBoss(time) {
+        if (!this.bossActive || !this.boss || this.mode !== 'cooperativo') return;
+        const b = this.boss;
+        if (!b.scene) { this.bossActive = false; this.boss = null; return; }
+        
+        // Asegurar que el boss sea visible
+        b.setVisible(true);
+        b.setActive(true);
+        b.setAlpha(1);
+        
+        // Asegurar que el boss tenga health inicializada
+        if (typeof b.getData('health') !== 'number') {
+            b.setData('health', 1000);
+            b.setData('maxHealth', 1000);
+        }
+        
+        const player = this.players[0] && this.players[0].sprite;
+        if (!player) return;
+
+        // Movimiento sencillo hacia el jugador
+        const dir = (player.x > b.x) ? 1 : -1;
+        try { b.body.setVelocityX(dir * (b.getData('moveSpeed') || 80)); } catch (e) {}
+
+        // Actualizar barra de vida del jefe
+        if (this.bossHealthBar && this.bossHealthText) {
+            const health = b.getData('health');
+            const maxHealth = b.getData('maxHealth') || 1000;
+            const healthPercent = Math.max(0, health / maxHealth);
+            const barWidth = 600;
+            this.bossHealthBar.width = barWidth * healthPercent;
+            this.bossHealthText.setText(`JEFE: ${Math.ceil(health)}/${maxHealth}`);
+        }
+
+        // Spawn de enemigos durante la fase del jefe (máximo 5)
+        if (!this._bossEnemySpawnTimer) this._bossEnemySpawnTimer = 0;
+        if (!this._bossEnemiesCount) this._bossEnemiesCount = 0;
+        
+        // Contar enemigos activos
+        this._bossEnemiesCount = this.enemies ? this.enemies.children.entries.filter(e => e.active).length : 0;
+        
+        // Spawn cada 10 segundos si hay menos de 5 enemigos
+        if (time - this._bossEnemySpawnTimer > 10000 && this._bossEnemiesCount < 5) {
+            this._bossEnemySpawnTimer = time;
+            // Alternar entre voladores y terrestres
+            const spawnType = Phaser.Math.Between(0, 1);
+            if (spawnType === 0) this.spawnFlyingEnemy();
+            else this.spawnGroundEnemy();
+        }
+
+        // Disparo de proyectil
+        if (time - (b.getData('lastShot') || 0) > (b.getData('shotCooldown') || 3500)) {
+            b.setData('lastShot', time);
+            this.bossShootAtPlayer();
+        }
+
+        // Ataque de área (radio 300): daña solo si el jugador está dentro del radio
+        const dist = Phaser.Math.Distance.Between(b.x, b.y, player.x, player.y);
+        if (time - (b.getData('lastAreaAttack') || 0) > (b.getData('areaAttackCooldown') || 8000)) {
+            b.setData('lastAreaAttack', time);
+            // Crear efecto visual del área
+            const areaCircle = this.add.circle(b.x, b.y, 300, 0xff0066, 0.3).setDepth(4);
+            this.tweens.add({
+                targets: areaCircle,
+                alpha: 0,
+                scale: 1.2,
+                duration: 800,
+                onComplete: () => { try { areaCircle.destroy(); } catch (e) {} }
+            });
+            // Aplicar daño solo si el jugador está dentro del radio
+            if (dist < 300) {
+                this.applyDamageToPlayer(0, 100);
+                this.cameras.main.shake(200, 0.02);
+            }
+        }
+
+        // Muerte del jefe
+        const bossHealth = b.getData('health');
+        if (bossHealth != null && bossHealth <= 0) {
+            // Destruir el collider antes de destruir el jefe
+            if (this.bossOverlap) {
+                try { this.physics.world.removeCollider(this.bossOverlap); } catch (e) {}
+                this.bossOverlap = null;
+            }
+            // Limpiar barra de vida del jefe
+            try {
+                if (this.bossHealthBarBg) this.bossHealthBarBg.destroy();
+                if (this.bossHealthBar) this.bossHealthBar.destroy();
+                if (this.bossHealthText) this.bossHealthText.destroy();
+            } catch (e) {}
+            try { if (b && b.scene) b.destroy(); } catch (e) {}
+            this.boss = null;
+            this.bossActive = false;
+            // Ir a escena de victoria en cooperativo
+            try {
+                this.scene.launch('VictoryScene', { mode: this.mode });
+                this.scene.stop();
+            } catch (e) {
+                console.warn('Failed to launch VictoryScene:', e);
+                this.waveText.setText('¡Victoria! Jefe derrotado');
+            }
+        }
+    }
+
+    updateEnemies(time) {
+        if (!this.enemies || this.mode !== 'cooperativo') return;
+        
+        this.enemies.children.entries.forEach(enemy => {
+            if (!enemy.active) return;
+            
+            // Actualizar barra de vida del enemigo
+            if (enemy.healthBar && enemy.healthBarBg) {
+                enemy.healthBarBg.x = enemy.x;
+                enemy.healthBarBg.y = enemy.y - 30;
+                enemy.healthBar.x = enemy.x;
+                enemy.healthBar.y = enemy.y - 30;
+                const healthPercent = Math.max(0, enemy.health / (enemy.maxHealth || 180));
+                enemy.healthBar.width = 50 * healthPercent;
+            }
+            
+            if (enemy.isFlying) {
+                // Disparar al jugador (solo voladores)
+                if (time - enemy.lastShot > enemy.shotCooldown) {
+                    enemy.lastShot = time;
+                    this.enemyShoot(enemy);
+                }
+            } else if (enemy.type === 'ground') {
+                // IA básica de persecución y salto
+                const playerSprite = this.players[0] && this.players[0].sprite;
+                if (!playerSprite) return;
+
+                // Movimiento horizontal hacia el jugador
+                const dir = (playerSprite.x > enemy.x) ? 1 : -1;
+                enemy.setVelocityX(dir * (enemy.moveSpeed || 90));
+
+                // Si el jugador está más alto, intentar saltar con cooldown
+                const now = time || this.time.now;
+                const onFloor = enemy.body && (enemy.body.blocked && enemy.body.blocked.down || enemy.body.touching && enemy.body.touching.down);
+                const horizDist = Math.abs(playerSprite.x - enemy.x);
+                const shouldJump = (playerSprite.y + 20 < enemy.y) || (enemy.body && (enemy.body.blocked && (enemy.body.blocked.left || enemy.body.blocked.right)));
+                if (onFloor && shouldJump && (now - (enemy.lastJump || 0) > (enemy.jumpCooldown || 500)) && horizDist < 160) {
+                    enemy.setVelocityY(enemy.jumpSpeed || -420);
+                    enemy.lastJump = now;
+                }
+
+                // Ataque cuerpo a cuerpo si está cerca, con i-frames para jugador y menor stun
+                const dist = Phaser.Math.Distance.Between(enemy.x, enemy.y, playerSprite.x, playerSprite.y);
+                const targetP = this.players[0];
+                const playerIframesUntil = (targetP && targetP.groundMeleeIframesUntil) || 0;
+                if (
+                    dist < 65 &&
+                    now - (enemy.lastMelee || 0) > (enemy.meleeCooldown || 1400) &&
+                    now >= playerIframesUntil
+                ) {
+                    enemy.lastMelee = now;
+                    // Daño fijo de 45
+                    this.applyDamageToPlayer(0, 45);
+                    // Reducir el tiempo de stun específico de este golpe
+                    if (targetP) {
+                        targetP.hitTimer = this.time.now + 150; // stun corto
+                        // Dar i-frames contra golpes cuerpo a cuerpo para evitar stunlock si hay varios enemigos
+                        targetP.groundMeleeIframesUntil = now + 750; // 0.75s sin poder ser golpeado por melee
+                    }
+                    // Pequeño retroceso visual al jugador
+                    const kdir = (playerSprite.x > enemy.x) ? 1 : -1;
+                    try { playerSprite.setVelocity(220 * kdir, -120); } catch (e) { /* ignore */ }
+                }
+            }
+        });
+    }
+
+    enemyShoot(enemy) {
+        if (!enemy.active || !this.players[0].sprite) return;
+        
+        const player = this.players[0].sprite;
+        const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, player.x, player.y);
+        
+        // Crear proyectil enemigo más grande
+        const proj = this.physics.add.sprite(enemy.x, enemy.y, 'tex_bullet');
+        proj.setTint(0xff6600); // Color naranja para proyectiles enemigos
+        proj.setScale(2.5); // Hacer el proyectil más grande
+        proj.damage = 35;
+        
+        this.enemyProjectiles.add(proj);
+        proj.body.setAllowGravity(false);
+        
+        const speed = 400;
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+        proj.body.setVelocity(vx, vy);
+        proj.rotation = angle;
+        
+        // Destruir después de 3 segundos
+        this.time.delayedCall(3000, () => {
+            if (proj && proj.active) proj.destroy();
+        });
+    }
+
+    checkWaveComplete() {
+        if (!this.enemies) return;
+        
+        const activeEnemies = this.enemies.children.entries.filter(e => e.active).length;
+        
+        if (activeEnemies === 0 && this.waveActive) {
+            this.waveActive = false;
+            this.waveCompleted = true;
+            
+            // Recuperar 150 HP al completar una oleada
+            try {
+                const p = this.players && this.players[0];
+                if (p) {
+                    p.health = Math.min(1000, (p.health || 0) + 150);
+                    // Feedback visual: flash verde y mensaje
+                    this.cameras.main.flash(200, 80, 255, 80);
+                }
+            } catch (e) { /* ignore */ }
+            
+            if (this.currentWave < this.maxWaves) {
+                this.waveText.setText(`Oleada ${this.currentWave} completada. +150 HP. Siguiente en 3s...`);
+                this.time.delayedCall(3000, () => this.startWave());
+            } else if (!this.bossActive && !this.boss) {
+                this.waveText.setText('¡Jefe final! Prepárate...');
+                // Spawn boss after a short delay
+                this.time.delayedCall(2500, () => this.spawnBoss());
             }
         }
     }
@@ -2983,6 +3857,112 @@ class GameScene extends Phaser.Scene {
     }
 }
 
+// --- ESCENA VICTORIA ---
+class VictoryScene extends Phaser.Scene {
+    constructor() { super('VictoryScene'); }
+    init(data) {
+        this.player1Index = data.player1Index ?? 0;
+        this.player2Index = data.player2Index ?? 1;
+        this.mode = data.mode || 'cooperativo';
+    }
+    create() {
+        const { width, height } = this.scale;
+        this.cameras.main.setBackgroundColor(0x003311);
+        
+        // Victory title
+        this.add.text(width/2, 120, '¡VICTORIA!', { font: '64px Arial', color: '#44ff44' }).setOrigin(0.5);
+        this.add.text(width/2, 200, '¡Derrotaron al jefe!', { font: '36px Arial', color: '#ffffff' }).setOrigin(0.5);
+
+        // Buttons
+        const buttonW = 260, buttonH = 64, spacing = 30;
+        const bx = width/2;
+        let by = height - 160;
+
+        this.buttons = [];
+
+        const restartBtn = this.add.rectangle(bx - (buttonW + spacing), by, buttonW, buttonH, 0x004466).setInteractive();
+        const restartTxt = this.add.text(restartBtn.x, restartBtn.y, 'REINICIAR', { font: '24px Arial', color: '#00ffff' }).setOrigin(0.5);
+        this.buttons.push({ rect: restartBtn, txt: restartTxt, callback: () => {
+            try { this.scene.stop('HudScene'); } catch (e) {}
+            try { this.scene.stop('GameScene'); } catch (e) {}
+            try { this.textures.remove('map1'); } catch (e) {}
+            this.scene.stop('VictoryScene');
+            this.scene.start('GameScene', { player1Index: this.player1Index, player2Index: this.player2Index, mode: this.mode, map: 'Mapa 1' });
+        }});
+
+        const charSelBtn = this.add.rectangle(bx, by, buttonW, buttonH, 0x003355).setInteractive();
+        const charSelTxt = this.add.text(charSelBtn.x, charSelBtn.y, 'SELECCIONAR PERSONAJE', { font: '18px Arial', color: '#00ffff' }).setOrigin(0.5);
+        this.buttons.push({ rect: charSelBtn, txt: charSelTxt, callback: () => {
+            try { this.scene.stop('HudScene'); } catch (e) {}
+            try { this.scene.stop('GameScene'); } catch (e) {}
+            try { this.textures.remove('map1'); } catch (e) {}
+            this.scene.stop('VictoryScene');
+            this.scene.start('CharacterSelector', { mode: this.mode });
+        }});
+
+        const menuBtn = this.add.rectangle(bx + (buttonW + spacing), by, buttonW, buttonH, 0x002244).setInteractive();
+        const menuTxt = this.add.text(menuBtn.x, menuBtn.y, 'MENU', { font: '24px Arial', color: '#00ffff' }).setOrigin(0.5);
+        this.buttons.push({ rect: menuBtn, txt: menuTxt, callback: () => {
+            try { this.scene.stop('HudScene'); } catch (e) {}
+            try { this.scene.stop('GameScene'); } catch (e) {}
+            try { this.textures.remove('map1'); } catch (e) {}
+            this.scene.stop('VictoryScene');
+            this.scene.start('Menu');
+        }});
+
+        // Selector visual
+        this.selector = this.add.rectangle(this.buttons[0].rect.x, this.buttons[0].rect.y, buttonW + 12, buttonH + 12).setStrokeStyle(4, 0xffff00).setOrigin(0.5);
+        this.selectedIndex = 0;
+
+        // Input keys
+        this.keyLeft = this.input.keyboard.addKey('A');
+        this.keyRight = this.input.keyboard.addKey('D');
+        this.keyLeft2 = this.input.keyboard.addKey('LEFT');
+        this.keyRight2 = this.input.keyboard.addKey('RIGHT');
+        this.keyConfirmP1 = this.input.keyboard.addKey('SPACE');
+        this.keyConfirmP2 = this.input.keyboard.addKey('ENTER');
+
+        // Gamepad support
+        this.input.gamepad.on('connected', pad => { pad._leftPressed = pad._rightPressed = pad._aPressed = false; });
+
+        // Pointer handling
+        this.buttons.forEach((b, idx) => {
+            b.rect.on('pointerdown', () => {
+                try {
+                    const cb = this.buttons && this.buttons[idx] && this.buttons[idx].callback;
+                    if (typeof cb === 'function') cb();
+                } catch (e) {
+                    console.warn('Menu button callback failed:', e);
+                }
+            });
+        });
+    }
+    update() {
+        if (Phaser.Input.Keyboard.JustDown(this.keyLeft) || Phaser.Input.Keyboard.JustDown(this.keyLeft2)) this.moveSelector(-1);
+        if (Phaser.Input.Keyboard.JustDown(this.keyRight) || Phaser.Input.Keyboard.JustDown(this.keyRight2)) this.moveSelector(1);
+        if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) || Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)) this.selectCurrent();
+
+        const pads = this.input.gamepad.gamepads;
+        pads.forEach(pad => {
+            if (!pad) return;
+            const x = (pad.axes.length > 0) ? pad.axes[0].getValue() : 0;
+            if (x < -0.6 && !pad._leftPressed) { this.moveSelector(-1); pad._leftPressed = true; }
+            else if (x > 0.6 && !pad._rightPressed) { this.moveSelector(1); pad._rightPressed = true; }
+            else if (x > -0.6 && x < 0.6) { pad._leftPressed = pad._rightPressed = false; }
+
+            const a = pad.buttons[0] && pad.buttons[0].pressed;
+            if (a && !pad._aPressed) { this.selectCurrent(); pad._aPressed = true; }
+            if (!a) pad._aPressed = false;
+        });
+    }
+    moveSelector(dir) {
+        this.selectedIndex = Phaser.Math.Wrap(this.selectedIndex + dir, 0, this.buttons.length);
+        const b = this.buttons[this.selectedIndex].rect;
+        if (b) { this.selector.x = b.x; this.selector.y = b.y; }
+    }
+    selectCurrent() { if (this.buttons && this.buttons[this.selectedIndex]) this.buttons[this.selectedIndex].callback(); }
+}
+
 // --- ESCENA GAME OVER ---
 class GameOver extends Phaser.Scene {
     constructor() { super('GameOver'); }
@@ -2996,9 +3976,17 @@ class GameOver extends Phaser.Scene {
     create() {
         const { width, height } = this.scale;
         this.cameras.main.setBackgroundColor(0x001d33);
-        const winnerName = this.winnerIndex === 0 ? (['Charles','Sofia','Franchesca','Mario'][this.player1Index] || 'Player 1') : (['Charles','Sofia','Franchesca','Mario'][this.player2Index] || 'Player 2');
-    this.add.text(width/2, 120, 'FIN DEL JUEGO', { font: '64px Arial', color: '#ff4444' }).setOrigin(0.5);
-    this.add.text(width/2, 200, `${winnerName} ganó!`, { font: '36px Arial', color: '#ffffff' }).setOrigin(0.5);
+        
+        // Si es modo cooperativo, mostrar "PERDIERON" sin jugador específico
+        if (this.mode === 'cooperativo') {
+            this.add.text(width/2, 120, 'FIN DEL JUEGO', { font: '64px Arial', color: '#ff4444' }).setOrigin(0.5);
+            this.add.text(width/2, 200, '¡PERDIERON!', { font: '36px Arial', color: '#ffffff' }).setOrigin(0.5);
+        } else {
+            // Modo versus: mostrar el ganador
+            const winnerName = this.winnerIndex === 0 ? (['Charles','Sofia','Franchesca','Mario'][this.player1Index] || 'Player 1') : (['Charles','Sofia','Franchesca','Mario'][this.player2Index] || 'Player 2');
+            this.add.text(width/2, 120, 'FIN DEL JUEGO', { font: '64px Arial', color: '#ff4444' }).setOrigin(0.5);
+            this.add.text(width/2, 200, `${winnerName} ganó!`, { font: '36px Arial', color: '#ffffff' }).setOrigin(0.5);
+        }
 
         // Buttons
         const buttonW = 260, buttonH = 64, spacing = 30;

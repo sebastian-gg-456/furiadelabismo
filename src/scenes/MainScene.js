@@ -35,13 +35,19 @@ export class MainScene extends Scene {
         this.enemy_blue = new BlueEnemy(this);
 
         // Cursor keys 
-        this.cursors = this.input.keyboard.createCursorKeys();
-        this.cursors.space.on("down", () => {
-            this.player.fire();
-        });
-        this.input.on("pointerdown", (pointer) => {
-            this.player.fire(pointer.x, pointer.y);
-        });
+        this.cursors = this.input && this.input.keyboard ? this.input.keyboard.createCursorKeys() : null;
+        // Attach keyboard space handler defensively
+        if (this.cursors && this.cursors.space && typeof this.cursors.space.on === 'function') {
+            this.cursors.space.on("down", () => {
+                try { if (this.player && typeof this.player.fire === 'function') this.player.fire(); } catch (e) { console.warn('Error calling player.fire():', e); }
+            });
+        }
+        // Pointer handler (defensive)
+        if (this.input && typeof this.input.on === 'function') {
+            this.input.on("pointerdown", (pointer) => {
+                try { if (this.player && typeof this.player.fire === 'function') this.player.fire(pointer.x, pointer.y); } catch (e) { console.warn('Error calling player.fire(pointer):', e); }
+            });
+        }
 
         // Overlap enemy with bullets
         this.physics.add.overlap(this.player.bullets, this.enemy_blue, (enemy, bullet) => {
@@ -97,12 +103,12 @@ export class MainScene extends Scene {
         this.player.update();
         this.enemy_blue.update();
 
-        // Player movement entries
-        if (this.cursors.up.isDown) {
-            this.player.move("up");
+        // Player movement entries (defensive checks)
+        if (this.cursors && this.cursors.up && this.cursors.up.isDown) {
+            try { if (this.player && typeof this.player.move === 'function') this.player.move("up"); } catch (e) { console.warn('Error in player.move("up"):', e); }
         }
-        if (this.cursors.down.isDown) {
-            this.player.move("down");
+        if (this.cursors && this.cursors.down && this.cursors.down.isDown) {
+            try { if (this.player && typeof this.player.move === 'function') this.player.move("down"); } catch (e) { console.warn('Error in player.move("down"):', e); }
         }
 
     }
