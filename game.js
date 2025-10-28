@@ -70,9 +70,10 @@ class Preloader extends Phaser.Scene {
                 hurt: 'repo3/caminar3-herido-derecha.png', jump: 'repo3/salto3-derecha.png'
             },
             repo4: {
-                walk: 'repo4/caminar4-derecha.png', idle: 'repo4/mirar4-derecha.png', shoot: 'repo4/disparo4-derecha.png',
-                block: 'repo4/bloqueo4-derecha.png', charge: 'repo4/carga4-energia-derecha.png',
-                hurt: 'repo4/caminar4-herido-derecha.png', jump: 'repo4/salto4-derecha.png'
+                // Mario (pj4) usará pj4-golpe.png: frame 0 = idle, frames 1-5 = punch
+                walk: 'pj4/pj4-golpe.png', idle: 'pj4/pj4-golpe.png', shoot: 'pj4/pj4-golpe.png',
+                punch: 'pj4/pj4-golpe.png', block: 'pj4/pj4-golpe.png', charge: 'pj4/pj4-golpe.png',
+                hurt: 'pj4/pj4-golpe.png', jump: 'pj4/pj4-golpe.png'
             }
         };
 
@@ -159,10 +160,39 @@ this.load.on('loaderror', (file) => {
     this.load.spritesheet('sofia_bullet', 'pj2/pj2-bala.png', { frameWidth: 64, frameHeight: 64 });
     // Sofia walk overlay (spritesheet 64x64): frames 0-2 para caminar
     this.load.spritesheet('sofia_walk', 'pj2/PJ2-golpe.png', { frameWidth: 64, frameHeight: 64 });
+    // Sofia punch overlay usa el mismo spritesheet (frames 1-5 para golpe)
+    this.load.spritesheet('sofia_punch', 'pj2/PJ2-golpe.png', { frameWidth: 64, frameHeight: 64 });
+    // Sofia block/charge overlay (spritesheet 64x64): frame 0 = block, frames 0-1 = charge animation
+    this.load.spritesheet('sofia_charge', 'pj2/carga2.png', { frameWidth: 64, frameHeight: 64 });
+    // Mario (pj4) punch overlay (spritesheet 64x64): frame 0 = idle, frames 1-5 = punch
+    this.load.spritesheet('mario_punch', 'pj4/pj4-golpe.png', { frameWidth: 64, frameHeight: 64 });
+    // Mario walk overlay (spritesheet 64x64): frames 0-2 para caminar
+    this.load.spritesheet('mario_walk', 'pj4/caminar4.png', { frameWidth: 64, frameHeight: 64 });
+    // Mario block overlay (spritesheet 64x64): un solo frame para bloquear
+    this.load.spritesheet('mario_block', 'pj4/pj4-bloquear.png', { frameWidth: 64, frameHeight: 64 });
+    // Mario charge overlay (spritesheet 64x64): frames 0-1 para carga de energía
+    this.load.spritesheet('mario_charge', 'pj4/carga.png', { frameWidth: 64, frameHeight: 64 });
     // Mario habilidad especial (R,L,X): agua (frames 0-12)
     this.load.spritesheet('mario_agua', 'pj4/agua.png', { frameWidth: 64, frameHeight: 64 });
     // Mario habilidad especial (R,R,X): bola de agua (frames 0-13)
     this.load.spritesheet('mario_bola_agua', 'pj4/bola-agua.png', { frameWidth: 64, frameHeight: 64 });
+    // Mario habilidad especial (L,R,X): láser de sangre (frames 0-14, 104x64)
+    this.load.spritesheet('mario_laser_sangre', 'pj4/laser-sangre.png', { frameWidth: 104, frameHeight: 64 });
+    
+    // Enemigos
+    this.load.setPath('assets/enemies');
+    // Enemigo volador (spritesheet 64x64): frame 0 = idle, frames 0-1 = shoot animation
+    this.load.spritesheet('flying_enemy', 'enemigo-ataque.png', { frameWidth: 64, frameHeight: 64 });
+    // Enemigo terrestre (spritesheet 64x64): frames 0-5 para moverse
+    this.load.spritesheet('ground_enemy_walk', 'moverce-enemigo2.png', { frameWidth: 64, frameHeight: 64 });
+    // Enemigo terrestre (spritesheet 64x64): frames 0-5 para atacar/desviar
+    this.load.spritesheet('ground_enemy_attack', 'ataque-enemigo2.png', { frameWidth: 64, frameHeight: 64 });
+    // Boss (spritesheets 64x64): caminar (idle=0, mover=1-2), ataque AoE (0-3), muerte (0-1)
+    this.load.spritesheet('boss_walk', 'jefe-caminar.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('boss_attack', 'ataque-jefe.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('boss_death', 'muerte-jefe.png', { frameWidth: 64, frameHeight: 64 });
+    
+    this.load.setPath('assets/player');
     }
 
     
@@ -276,6 +306,18 @@ this.load.on('loaderror', (file) => {
                 const frames = this.anims.generateFrameNumbers('mario_bola_agua', { start: startFrame, end: endFrame });
                 this.anims.create({ key: 'mario_bola_agua_impact', frames, frameRate: 20, repeat: 0 });
             }
+            // Animación de láser de sangre de Mario - alargamiento (frames 0-14, sin loop) - para L,R,X
+            if (this.textures.exists('mario_laser_sangre') && !this.anims.exists('mario_laser_sangre')) {
+                const tex = this.textures.get('mario_laser_sangre');
+                let totalFrames = 1;
+                try {
+                    if (tex && typeof tex.frameTotal === 'number') totalFrames = Math.max(1, tex.frameTotal);
+                    else if (tex && tex.frames) totalFrames = Math.max(1, Object.keys(tex.frames).filter(k => !isNaN(+k)).length);
+                } catch (e) { totalFrames = 1; }
+                const endFrame = Math.min(14, Math.max(0, totalFrames - 1));
+                const frames = this.anims.generateFrameNumbers('mario_laser_sangre', { start: 0, end: endFrame });
+                this.anims.create({ key: 'mario_laser_sangre', frames, frameRate: 18, repeat: 0 });
+            }
 
             // Override específico para Sofía (repo2 / char1): disparo usa frames 1..5 de pj2-disparo
             try {
@@ -304,9 +346,172 @@ this.load.on('loaderror', (file) => {
                     } catch (e) { totalWalk = 1; }
                     const endWalk = Math.min(2, Math.max(0, totalWalk - 1));
                     const framesWalk = this.anims.generateFrameNumbers('sofia_walk', { start: 0, end: endWalk });
-                    this.anims.create({ key: 'sofia_walk', frames: framesWalk, frameRate: 6, repeat: -1 });
+                    this.anims.create({ key: 'sofia_walk', frames: framesWalk, frameRate: 4, repeat: -1 });
+                }
+                // Animación de golpe de Sofía (frames 1-5) más rápida
+                if (this.textures.exists('sofia_punch') && !this.anims.exists('sofia_punch')) {
+                    const texPunch = this.textures.get('sofia_punch');
+                    let totalPunch = 1;
+                    try {
+                        if (texPunch && typeof texPunch.frameTotal === 'number') totalPunch = Math.max(1, texPunch.frameTotal);
+                        else if (texPunch && texPunch.frames) totalPunch = Math.max(1, Object.keys(texPunch.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalPunch = 1; }
+                    const endPunch = Math.min(5, Math.max(1, totalPunch - 1));
+                    const framesPunch = this.anims.generateFrameNumbers('sofia_punch', { start: 1, end: endPunch });
+                    this.anims.create({ key: 'sofia_punch', frames: framesPunch, frameRate: 18, repeat: 0 });
+                }
+                // Animación de bloqueo de Sofía (solo frame 0, estático)
+                if (this.textures.exists('sofia_charge') && !this.anims.exists('sofia_block')) {
+                    const framesBlock = this.anims.generateFrameNumbers('sofia_charge', { start: 0, end: 0 });
+                    this.anims.create({ key: 'sofia_block', frames: framesBlock, frameRate: 1, repeat: 0 });
+                }
+                // Animación de carga de energía de Sofía (frames 0-1 en bucle)
+                if (this.textures.exists('sofia_charge') && !this.anims.exists('sofia_charge_anim')) {
+                    const texCharge = this.textures.get('sofia_charge');
+                    let totalCharge = 1;
+                    try {
+                        if (texCharge && typeof texCharge.frameTotal === 'number') totalCharge = Math.max(1, texCharge.frameTotal);
+                        else if (texCharge && texCharge.frames) totalCharge = Math.max(1, Object.keys(texCharge.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalCharge = 1; }
+                    const endCharge = Math.min(1, Math.max(0, totalCharge - 1));
+                    const framesCharge = this.anims.generateFrameNumbers('sofia_charge', { start: 0, end: endCharge });
+                    this.anims.create({ key: 'sofia_charge_anim', frames: framesCharge, frameRate: 8, repeat: -1 });
                 }
             } catch (e) { /* ignore sofia override errors */ }
+            
+            // Animaciones para Mario (char3 / pj4)
+            try {
+                // Animación de golpe de Mario (frames 1-5)
+                if (this.textures.exists('mario_punch') && !this.anims.exists('mario_punch')) {
+                    const texMarioPunch = this.textures.get('mario_punch');
+                    let totalMarioPunch = 1;
+                    try {
+                        if (texMarioPunch && typeof texMarioPunch.frameTotal === 'number') totalMarioPunch = Math.max(1, texMarioPunch.frameTotal);
+                        else if (texMarioPunch && texMarioPunch.frames) totalMarioPunch = Math.max(1, Object.keys(texMarioPunch.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalMarioPunch = 1; }
+                    const endMarioPunch = Math.min(5, Math.max(1, totalMarioPunch - 1));
+                    const framesMarioPunch = this.anims.generateFrameNumbers('mario_punch', { start: 1, end: endMarioPunch });
+                    this.anims.create({ key: 'mario_punch', frames: framesMarioPunch, frameRate: 18, repeat: 0 });
+                }
+                // Animación de caminar de Mario (frames 0-2) con frameRate lento
+                if (this.textures.exists('mario_walk') && !this.anims.exists('mario_walk')) {
+                    const texMarioWalk = this.textures.get('mario_walk');
+                    let totalMarioWalk = 1;
+                    try {
+                        if (texMarioWalk && typeof texMarioWalk.frameTotal === 'number') totalMarioWalk = Math.max(1, texMarioWalk.frameTotal);
+                        else if (texMarioWalk && texMarioWalk.frames) totalMarioWalk = Math.max(1, Object.keys(texMarioWalk.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalMarioWalk = 1; }
+                    const endMarioWalk = Math.min(2, Math.max(0, totalMarioWalk - 1));
+                    const framesMarioWalk = this.anims.generateFrameNumbers('mario_walk', { start: 0, end: endMarioWalk });
+                    this.anims.create({ key: 'mario_walk', frames: framesMarioWalk, frameRate: 4, repeat: -1 });
+                }
+                // Animación de bloqueo de Mario (solo frame 0, estático)
+                if (this.textures.exists('mario_block') && !this.anims.exists('mario_block')) {
+                    const framesMarioBlock = this.anims.generateFrameNumbers('mario_block', { start: 0, end: 0 });
+                    this.anims.create({ key: 'mario_block', frames: framesMarioBlock, frameRate: 1, repeat: 0 });
+                }
+                // Animación de carga de energía de Mario (frames 0-1 en bucle)
+                if (this.textures.exists('mario_charge') && !this.anims.exists('mario_charge_anim')) {
+                    const texMarioCharge = this.textures.get('mario_charge');
+                    let totalMarioCharge = 1;
+                    try {
+                        if (texMarioCharge && typeof texMarioCharge.frameTotal === 'number') totalMarioCharge = Math.max(1, texMarioCharge.frameTotal);
+                        else if (texMarioCharge && texMarioCharge.frames) totalMarioCharge = Math.max(1, Object.keys(texMarioCharge.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalMarioCharge = 1; }
+                    const endMarioCharge = Math.min(1, Math.max(0, totalMarioCharge - 1));
+                    const framesMarioCharge = this.anims.generateFrameNumbers('mario_charge', { start: 0, end: endMarioCharge });
+                    this.anims.create({ key: 'mario_charge_anim', frames: framesMarioCharge, frameRate: 8, repeat: -1 });
+                }
+            } catch (e) { /* ignore mario override errors */ }
+            
+            // Animaciones para enemigos
+            try {
+                // Animación idle del enemigo volador (frame 0 estático)
+                if (this.textures.exists('flying_enemy') && !this.anims.exists('flying_enemy_idle')) {
+                    const framesIdle = this.anims.generateFrameNumbers('flying_enemy', { start: 0, end: 0 });
+                    this.anims.create({ key: 'flying_enemy_idle', frames: framesIdle, frameRate: 1, repeat: -1 });
+                }
+                // Animación de disparo del enemigo volador (frames 0-1)
+                if (this.textures.exists('flying_enemy') && !this.anims.exists('flying_enemy_shoot')) {
+                    const texFlyingShoot = this.textures.get('flying_enemy');
+                    let totalFlyingShoot = 1;
+                    try {
+                        if (texFlyingShoot && typeof texFlyingShoot.frameTotal === 'number') totalFlyingShoot = Math.max(1, texFlyingShoot.frameTotal);
+                        else if (texFlyingShoot && texFlyingShoot.frames) totalFlyingShoot = Math.max(1, Object.keys(texFlyingShoot.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalFlyingShoot = 1; }
+                    const endFlyingShoot = Math.min(1, Math.max(0, totalFlyingShoot - 1));
+                    const framesShoot = this.anims.generateFrameNumbers('flying_enemy', { start: 0, end: endFlyingShoot });
+                    this.anims.create({ key: 'flying_enemy_shoot', frames: framesShoot, frameRate: 10, repeat: 0 });
+                }
+                // Animación de caminar del enemigo terrestre (frames 0-5)
+                if (this.textures.exists('ground_enemy_walk') && !this.anims.exists('ground_enemy_walk')) {
+                    const texGroundWalk = this.textures.get('ground_enemy_walk');
+                    let totalGroundWalk = 1;
+                    try {
+                        if (texGroundWalk && typeof texGroundWalk.frameTotal === 'number') totalGroundWalk = Math.max(1, texGroundWalk.frameTotal);
+                        else if (texGroundWalk && texGroundWalk.frames) totalGroundWalk = Math.max(1, Object.keys(texGroundWalk.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalGroundWalk = 1; }
+                    const endGroundWalk = Math.min(5, Math.max(0, totalGroundWalk - 1));
+                    const framesGroundWalk = this.anims.generateFrameNumbers('ground_enemy_walk', { start: 0, end: endGroundWalk });
+                    this.anims.create({ key: 'ground_enemy_walk', frames: framesGroundWalk, frameRate: 10, repeat: -1 });
+                }
+                // Animación de ataque del enemigo terrestre (frames 0-5)
+                if (this.textures.exists('ground_enemy_attack') && !this.anims.exists('ground_enemy_attack')) {
+                    const texGroundAttack = this.textures.get('ground_enemy_attack');
+                    let totalGroundAttack = 1;
+                    try {
+                        if (texGroundAttack && typeof texGroundAttack.frameTotal === 'number') totalGroundAttack = Math.max(1, texGroundAttack.frameTotal);
+                        else if (texGroundAttack && texGroundAttack.frames) totalGroundAttack = Math.max(1, Object.keys(texGroundAttack.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalGroundAttack = 1; }
+                    const endGroundAttack = Math.min(5, Math.max(0, totalGroundAttack - 1));
+                    const framesGroundAttack = this.anims.generateFrameNumbers('ground_enemy_attack', { start: 0, end: endGroundAttack });
+                    this.anims.create({ key: 'ground_enemy_attack', frames: framesGroundAttack, frameRate: 18, repeat: 0 });
+                }
+                // Animaciones del jefe final
+                if (this.textures.exists('boss_walk')) {
+                    // Idle: frame 0 estático
+                    if (!this.anims.exists('boss_idle')) {
+                        const framesIdleBoss = this.anims.generateFrameNumbers('boss_walk', { start: 0, end: 0 });
+                        this.anims.create({ key: 'boss_idle', frames: framesIdleBoss, frameRate: 1, repeat: -1 });
+                    }
+                    // Mover: frames 1-2 en loop
+                    if (!this.anims.exists('boss_move')) {
+                        const texBossWalk = this.textures.get('boss_walk');
+                        let totalBossWalk = 1;
+                        try {
+                            if (texBossWalk && typeof texBossWalk.frameTotal === 'number') totalBossWalk = Math.max(1, texBossWalk.frameTotal);
+                            else if (texBossWalk && texBossWalk.frames) totalBossWalk = Math.max(1, Object.keys(texBossWalk.frames).filter(k => !isNaN(+k)).length);
+                        } catch (e) { totalBossWalk = 1; }
+                        const endBossMove = Math.min(2, Math.max(1, totalBossWalk - 1));
+                        const framesBossMove = this.anims.generateFrameNumbers('boss_walk', { start: 1, end: endBossMove });
+                        this.anims.create({ key: 'boss_move', frames: framesBossMove, frameRate: 6, repeat: -1 });
+                    }
+                }
+                // Ataque de área: frames 0-3 (más lento)
+                if (this.textures.exists('boss_attack') && !this.anims.exists('boss_attack_anim')) {
+                    const texBossAtk = this.textures.get('boss_attack');
+                    let totalBossAtk = 1;
+                    try {
+                        if (texBossAtk && typeof texBossAtk.frameTotal === 'number') totalBossAtk = Math.max(1, texBossAtk.frameTotal);
+                        else if (texBossAtk && texBossAtk.frames) totalBossAtk = Math.max(1, Object.keys(texBossAtk.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalBossAtk = 1; }
+                    const endBossAtk = Math.min(3, Math.max(0, totalBossAtk - 1));
+                    const framesBossAtk = this.anims.generateFrameNumbers('boss_attack', { start: 0, end: endBossAtk });
+                    this.anims.create({ key: 'boss_attack_anim', frames: framesBossAtk, frameRate: 4, repeat: 0 });
+                }
+                // Muerte del jefe: frames 0-1
+                if (this.textures.exists('boss_death') && !this.anims.exists('boss_death')) {
+                    const texBossDeath = this.textures.get('boss_death');
+                    let totalBossDeath = 1;
+                    try {
+                        if (texBossDeath && typeof texBossDeath.frameTotal === 'number') totalBossDeath = Math.max(1, texBossDeath.frameTotal);
+                        else if (texBossDeath && texBossDeath.frames) totalBossDeath = Math.max(1, Object.keys(texBossDeath.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalBossDeath = 1; }
+                    const endBossDeath = Math.min(1, Math.max(0, totalBossDeath - 1));
+                    const framesBossDeath = this.anims.generateFrameNumbers('boss_death', { start: 0, end: endBossDeath });
+                    this.anims.create({ key: 'boss_death', frames: framesBossDeath, frameRate: 6, repeat: 0 });
+                }
+            } catch (e) { /* ignore enemy anim errors */ }
         } catch (e) { /* ignore charles bullet anim errors */ }
         // Fallback textures: si faltan algunos assets (target / tex_bullet), créalos con gráficos simples
         try {
@@ -1676,6 +1881,17 @@ class GameScene extends Phaser.Scene {
                 if (enemy.reflectsProjectiles && !proj.isReflected && !proj.parryReflected) {
                     proj.isReflected = true;
                     try { proj.setTint(0x66ccff); } catch (e) { /* visual */ }
+                    
+                    // Reproducir animación de ataque al desviar
+                    if (enemy.texture && enemy.texture.key === 'ground_enemy_walk' && this.anims.exists('ground_enemy_attack')) {
+                        enemy.play('ground_enemy_attack');
+                        // Volver a caminar después de la animación
+                        enemy.once('animationcomplete', () => {
+                            if (enemy.active && this.anims.exists('ground_enemy_walk')) {
+                                enemy.play('ground_enemy_walk');
+                            }
+                        });
+                    }
 
                     const playerSprite = this.players[0] && this.players[0].sprite;
                     if (playerSprite && proj.body) {
@@ -1992,6 +2208,33 @@ class GameScene extends Phaser.Scene {
                 if (player.walkOverlay.setDepth) player.walkOverlay.setDepth((sprite.depth || 0) + 1);
             } catch (e) { /* ignore */ }
         }
+        // Mantener overlay de golpe pegado al personaje
+        if (player.punchOverlay && player.punchOverlay.active) {
+            try {
+                player.punchOverlay.x = sprite.x;
+                player.punchOverlay.y = sprite.y;
+                player.punchOverlay.flipX = sprite.flipX;
+                if (player.punchOverlay.setDepth) player.punchOverlay.setDepth((sprite.depth || 0) + 1);
+            } catch (e) { /* ignore */ }
+        }
+        // Mantener overlay de bloqueo pegado al personaje
+        if (player.blockOverlay && player.blockOverlay.active) {
+            try {
+                player.blockOverlay.x = sprite.x;
+                player.blockOverlay.y = sprite.y;
+                player.blockOverlay.flipX = sprite.flipX;
+                if (player.blockOverlay.setDepth) player.blockOverlay.setDepth((sprite.depth || 0) + 1);
+            } catch (e) { /* ignore */ }
+        }
+        // Mantener overlay de carga pegado al personaje
+        if (player.chargeOverlay && player.chargeOverlay.active) {
+            try {
+                player.chargeOverlay.x = sprite.x;
+                player.chargeOverlay.y = sprite.y;
+                player.chargeOverlay.flipX = sprite.flipX;
+                if (player.chargeOverlay.setDepth) player.chargeOverlay.setDepth((sprite.depth || 0) + 1);
+            } catch (e) { /* ignore */ }
+        }
 
         // Si está siendo golpeado, reproducir animación de 'hurt' y no permitir acciones
         if (player.beingHit) {
@@ -2182,28 +2425,67 @@ class GameScene extends Phaser.Scene {
             if (dist > chargeDistance) {
                 // Cargar energía (lejos)
                 player.blocking = false;
-                sprite.setTint(0x2222cc); // Color para cargar
+                
+                // Para Sofía y Mario, usar overlay de carga
+                if ((charIndexLocal === 1 && this.textures.exists('sofia_charge') && this.anims.exists('sofia_charge_anim')) ||
+                    (charIndexLocal === 3 && this.textures.exists('mario_charge') && this.anims.exists('mario_charge_anim'))) {
+                    
+                    const chargeTexture = charIndexLocal === 1 ? 'sofia_charge' : 'mario_charge';
+                    const chargeAnim = charIndexLocal === 1 ? 'sofia_charge_anim' : 'mario_charge_anim';
+                    
+                    if (!player.chargeOverlay) {
+                        const chargeSprite = this.add.sprite(sprite.x, sprite.y, chargeTexture, 0).setDepth(sprite.depth + 1);
+                        chargeSprite.setOrigin(0.5, 0.5);
+                        chargeSprite.flipX = sprite.flipX;
+                        chargeSprite.play(chargeAnim);
+                        player.chargeOverlay = chargeSprite;
+                        // Ocultar sprite base
+                        try { sprite.setAlpha(0); } catch (e) { }
+                    }
+                } else {
+                    // Otros personajes: sistema normal
+                    sprite.setTint(0x2222cc); // Color para cargar
+                    const chargeKey = `char${charIndexLocal}_charge`;
+                    if (this.textures.exists(chargeKey)) {
+                        try { sprite.setTexture(chargeKey); sprite.setFrame(1); } catch (e) { /* ignore */ }
+                    } else {
+                        try { if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop(); sprite.setFrame(1); } catch (e) { /* ignore if no frame 1 */ }
+                    }
+                }
+                
                 // En modo versus, cargar normalmente. En coop, ya se maneja al inicio
                 if (this.mode !== 'cooperativo') {
                     this.changeEnergyFor(player, 2.0);
                 }
-                // intentar usar la textura específica de carga y mostrar frame 1
-                const chargeKey = `char${charIndexLocal}_charge`;
-                if (this.textures.exists(chargeKey)) {
-                    try { sprite.setTexture(chargeKey); sprite.setFrame(1); } catch (e) { /* ignore */ }
-                } else {
-                    try { if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop(); sprite.setFrame(1); } catch (e) { /* ignore if no frame 1 */ }
-                }
             } else {
                 // Bloquear (cerca)
                 player.blocking = true;
-                sprite.setTint(0x336633); // Color para bloquear
-                // intentar usar la textura específica de bloqueo y mostrar frame 1
-                const blockKey = `char${charIndexLocal}_block`;
-                if (this.textures.exists(blockKey)) {
-                    try { sprite.setTexture(blockKey); sprite.setFrame(1); } catch (e) { /* ignore */ }
+                
+                // Para Sofía y Mario, usar overlay de bloqueo (frame 0 estático)
+                if ((charIndexLocal === 1 && this.textures.exists('sofia_charge') && this.anims.exists('sofia_block')) ||
+                    (charIndexLocal === 3 && this.textures.exists('mario_block') && this.anims.exists('mario_block'))) {
+                    
+                    const blockTexture = charIndexLocal === 1 ? 'sofia_charge' : 'mario_block';
+                    const blockAnim = charIndexLocal === 1 ? 'sofia_block' : 'mario_block';
+                    
+                    if (!player.blockOverlay) {
+                        const blockSprite = this.add.sprite(sprite.x, sprite.y, blockTexture, 0).setDepth(sprite.depth + 1);
+                        blockSprite.setOrigin(0.5, 0.5);
+                        blockSprite.flipX = sprite.flipX;
+                        blockSprite.play(blockAnim);
+                        player.blockOverlay = blockSprite;
+                        // Ocultar sprite base
+                        try { sprite.setAlpha(0); } catch (e) { }
+                    }
                 } else {
-                    try { if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop(); sprite.setFrame(1); } catch (e) { /* ignore if no frame 1 */ }
+                    // Otros personajes: sistema normal
+                    sprite.setTint(0x336633); // Color para bloquear
+                    const blockKey = `char${charIndexLocal}_block`;
+                    if (this.textures.exists(blockKey)) {
+                        try { sprite.setTexture(blockKey); sprite.setFrame(1); } catch (e) { /* ignore */ }
+                    } else {
+                        try { if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop(); sprite.setFrame(1); } catch (e) { /* ignore if no frame 1 */ }
+                    }
                 }
             }
             // No puede moverse, saltar, disparar ni pegar
@@ -2212,6 +2494,20 @@ class GameScene extends Phaser.Scene {
             } else {
             player.blocking = false;
             player.wasBlocking = false; // Reset para detectar próxima pulsación
+            
+            // Destruir overlays de bloqueo/carga de Sofía si existen
+            if (player.blockOverlay) {
+                if (player.blockOverlay.scene) player.blockOverlay.destroy();
+                player.blockOverlay = null;
+            }
+            if (player.chargeOverlay) {
+                if (player.chargeOverlay.scene) player.chargeOverlay.destroy();
+                player.chargeOverlay = null;
+            }
+            
+            // Restaurar visibilidad del sprite base
+            try { sprite.setAlpha(1); } catch (e) { }
+            
             // restaurar colores originales y textura/frame por defecto
             if (sprite.clearTint) sprite.clearTint();
             const idleKey = `char${charIndex}_idle`;
@@ -2228,15 +2524,20 @@ class GameScene extends Phaser.Scene {
         else if (right) { sprite.setVelocityX(speed); sprite.flipX = false; }
         else { sprite.setVelocityX(0); }
 
-        // Para Sofía (char1), gestionar overlay de caminar
-        if (charIndex === 1 && this.textures.exists('sofia_walk') && this.anims.exists('sofia_walk')) {
+        // Para Sofía (char1) y Mario (char3), gestionar overlay de caminar
+        if ((charIndex === 1 && this.textures.exists('sofia_walk') && this.anims.exists('sofia_walk')) ||
+            (charIndex === 3 && this.textures.exists('mario_walk') && this.anims.exists('mario_walk'))) {
+            
+            const walkTexture = charIndex === 1 ? 'sofia_walk' : 'mario_walk';
+            const walkAnim = charIndex === 1 ? 'sofia_walk' : 'mario_walk';
+            
             const isMoving = left || right;
             if (isMoving && !player.walkOverlay) {
                 // Crear overlay de caminar
-                const walkSprite = this.add.sprite(sprite.x, sprite.y, 'sofia_walk', 0).setDepth(sprite.depth + 1);
+                const walkSprite = this.add.sprite(sprite.x, sprite.y, walkTexture, 0).setDepth(sprite.depth + 1);
                 walkSprite.setOrigin(0.5, 0.5);
                 walkSprite.flipX = sprite.flipX;
-                walkSprite.play('sofia_walk');
+                walkSprite.play(walkAnim);
                 player.walkOverlay = walkSprite;
             } else if (!isMoving && player.walkOverlay) {
                 // Destruir overlay de caminar cuando se detiene
@@ -2256,10 +2557,38 @@ class GameScene extends Phaser.Scene {
         // Puñetazo: 50 de daño
         if (punch && (time - player.lastPunch) > player.punchCD) {
             player.lastPunch = time;
-            // lock punch animation visibility for 450ms so it's noticeable
-            player._lockedAction = 'punch';
-            player.actionLockUntil = time + 450;
-            this.doPunch(i);
+            
+            // Para Sofía (char1) y Mario (char3), crear sprite de animación de golpe
+            if ((charIndex === 1 && this.textures.exists('sofia_punch') && this.anims.exists('sofia_punch')) ||
+                (charIndex === 3 && this.textures.exists('mario_punch') && this.anims.exists('mario_punch'))) {
+                
+                const punchTexture = charIndex === 1 ? 'sofia_punch' : 'mario_punch';
+                const punchAnim = charIndex === 1 ? 'sofia_punch' : 'mario_punch';
+                
+                const punchSprite = this.add.sprite(sprite.x, sprite.y, punchTexture, 1).setDepth(sprite.depth + 1);
+                punchSprite.setOrigin(0.5, 0.5);
+                punchSprite.flipX = sprite.flipX;
+                punchSprite.play(punchAnim);
+                // Guardar referencia para seguir al jugador mientras dura la animación
+                player.punchOverlay = punchSprite;
+                // Ocultar el sprite base inicialmente
+                try { sprite.setAlpha(0); } catch (e) { }
+                punchSprite.once('animationcomplete', () => {
+                    if (punchSprite && punchSprite.scene) punchSprite.destroy();
+                    if (player.punchOverlay === punchSprite) player.punchOverlay = null;
+                    // Restaurar visibilidad del sprite base
+                    try { sprite.setAlpha(1); } catch (e) { }
+                    // Ejecutar golpe justo al terminar la animación
+                    this.doPunch(i);
+                });
+                // Evitar ejecutar golpe inmediatamente; ya lo haremos al terminar la animación
+                return;
+            } else {
+                // Para otros personajes, usar el sistema normal con lock
+                player._lockedAction = 'punch';
+                player.actionLockUntil = time + 450;
+                this.doPunch(i);
+            }
         }
 
         // Disparo: 20 de daño, 100 energía
@@ -2321,19 +2650,56 @@ class GameScene extends Phaser.Scene {
 
         const animKey = `char${charIndex}_${action}`;
 
-        // Gestión de visibilidad de overlays para Sofía:
-        // - Si shootOverlay activo: ocultar idle y caminar
+        // Gestión de visibilidad de overlays para Sofía y Mario:
+        // - Si shootOverlay activo: ocultar todo
+        // - Si punchOverlay activo: ocultar idle y caminar (pero no el disparo)
+        // - Si blockOverlay o chargeOverlay activo: ocultar idle y otros overlays
         // - Si solo walkOverlay activo: ocultar idle siempre
         // - Si ninguno activo: mostrar todo
-        if (charIndex === 1) {
+        if (charIndex === 1 || charIndex === 3) {
             const hasShoot = player.shootOverlay && player.shootOverlay.active;
+            const hasPunch = player.punchOverlay && player.punchOverlay.active;
             const hasWalk = player.walkOverlay && player.walkOverlay.active;
+            const hasBlock = player.blockOverlay && player.blockOverlay.active;
+            const hasCharge = player.chargeOverlay && player.chargeOverlay.active;
+            
             if (hasShoot) {
-                // Disparo esconde todo (idle y walk)
+                // Disparo esconde todo (idle, walk, punch, block, charge)
                 try { sprite.setAlpha(0); } catch (e) { }
                 if (hasWalk && player.walkOverlay) {
                     try { player.walkOverlay.setAlpha(0); } catch (e) { }
                 }
+                if (hasPunch && player.punchOverlay) {
+                    try { player.punchOverlay.setAlpha(0); } catch (e) { }
+                }
+                if (hasBlock && player.blockOverlay) {
+                    try { player.blockOverlay.setAlpha(0); } catch (e) { }
+                }
+                if (hasCharge && player.chargeOverlay) {
+                    try { player.chargeOverlay.setAlpha(0); } catch (e) { }
+                }
+            } else if (hasBlock || hasCharge) {
+                // Bloqueo/Carga esconde idle, walk y punch
+                try { sprite.setAlpha(0); } catch (e) { }
+                if (hasWalk && player.walkOverlay) {
+                    try { player.walkOverlay.setAlpha(0); } catch (e) { }
+                }
+                if (hasPunch && player.punchOverlay) {
+                    try { player.punchOverlay.setAlpha(0); } catch (e) { }
+                }
+                if (hasBlock && player.blockOverlay) {
+                    try { player.blockOverlay.setAlpha(1); } catch (e) { }
+                }
+                if (hasCharge && player.chargeOverlay) {
+                    try { player.chargeOverlay.setAlpha(1); } catch (e) { }
+                }
+            } else if (hasPunch) {
+                // Golpe esconde idle y walk, pero no disparo
+                try { sprite.setAlpha(0); } catch (e) { }
+                if (hasWalk && player.walkOverlay) {
+                    try { player.walkOverlay.setAlpha(0); } catch (e) { }
+                }
+                try { player.punchOverlay.setAlpha(1); } catch (e) { }
             } else if (hasWalk) {
                 // Caminar siempre esconde el sprite base (idle)
                 try { sprite.setAlpha(0); } catch (e) { }
@@ -2411,7 +2777,8 @@ class GameScene extends Phaser.Scene {
         const explicitDamage = (args.length > 1) ? args[1] : null;
         const shooter = this.players[i];
         if (!shooter || !shooter.sprite) return;
-        const sx = shooter.sprite.x + (shooter.sprite.flipX ? -30 : 30);
+        // Aumentar distancia del spawn del proyectil de 30 a 60 píxeles
+        const sx = shooter.sprite.x + (shooter.sprite.flipX ? -60 : 60);
         const sy = shooter.sprite.y - 10;
 
         // Elegir sprite de proyectil según el personaje que dispara
@@ -2422,8 +2789,10 @@ class GameScene extends Phaser.Scene {
         } else if (shooterChar === 1 && this.textures.exists('sofia_bullet')) {
             projKey = 'sofia_bullet';
         }
-        const proj = this.physics.add.sprite(sx, sy, projKey);
+        const proj = this.physics.add.sprite(sx, sy, projKey, 0); // Especificar frame 0 inicial
         proj.shooter = i;
+        proj.setDepth(10); // Asegurar que el proyectil esté visible por encima de otros elementos
+        
         if (explicitDamage != null) {
             proj.damage = explicitDamage;
             // Si el daño es mayor a 20 (disparo cargado), hacer el proyectil más grande
@@ -2444,6 +2813,10 @@ class GameScene extends Phaser.Scene {
 
         this.projectiles.add(proj);
         proj.body.setAllowGravity(false);
+        
+        // Configurar para que no se destruya al salir de los límites del mundo
+        proj.body.setCollideWorldBounds(false);
+        proj.body.onWorldBounds = false;
 
         // Si es bala de Charles o Sofía, reproducir animación de vuelo
         if (projKey === 'charles_bullet' && this.anims.exists('charles_bullet_fly')) {
@@ -2465,7 +2838,8 @@ class GameScene extends Phaser.Scene {
             if (proj && proj.body) proj.body.setVelocityX(velocity);
         }
 
-        this.time.delayedCall(2200, () => {
+        // Aumentar tiempo de vida del proyectil a 6000ms (6 segundos) para mayor alcance
+        this.time.delayedCall(6000, () => {
             if (proj && proj.active) proj.destroy();
         });
     }
@@ -2483,7 +2857,7 @@ class GameScene extends Phaser.Scene {
             try { attacker.sprite.setTexture(atkPunchKey); attacker.sprite.setFrame(0); } catch (e) { }
         }
 
-        // En modo cooperativo, golpear enemigos en lugar de PvP
+        // En modo cooperativo, golpear enemigos (y jefe) en lugar de PvP
         if (this.mode === 'cooperativo') {
             if (!this.enemies) return;
             
@@ -2513,6 +2887,28 @@ class GameScene extends Phaser.Scene {
                     }
                 }
             });
+
+            // También golpear al jefe si está cerca
+            if (this.bossActive && this.boss) {
+                const b = this.boss;
+                const distBoss = Phaser.Math.Distance.Between(attacker.sprite.x, attacker.sprite.y, b.x, b.y);
+                if (distBoss < hitRange) {
+                    b.health = Math.max(0, b.health - 15); // Cap: 15 por golpe
+                    
+                    // Pequeño retroceso y flash
+                    const dir = (b.x > attacker.sprite.x) ? 1 : -1;
+                    if (b.body) b.body.setVelocity(220 * dir, -120);
+                    
+                    const flash = this.add.circle(b.x, b.y, 20, 0xff3300, 0.8).setDepth(10);
+                    this.tweens.add({
+                        targets: flash,
+                        alpha: 0,
+                        scale: 2,
+                        duration: 250,
+                        onComplete: () => { try { flash.destroy(); } catch (e) {} }
+                    });
+                }
+            }
             return;
         }
 
@@ -2610,10 +3006,14 @@ class GameScene extends Phaser.Scene {
             y = Phaser.Math.Between(100, height - 200);
         }
         
-        // Crear sprite del enemigo más grande
-        const enemy = this.physics.add.sprite(x, y, 'tex_bullet');
-        enemy.setTint(0xff0000); // Color rojo para distinguir
-        enemy.setScale(3.5); // Aumentado de 1.5 a 3.5
+        // Crear sprite del enemigo volador con el nuevo sprite
+        const enemy = this.physics.add.sprite(x, y, 'flying_enemy', 0);
+        enemy.setScale(1.5); // Reducido de 3.5 a 1.5 (tamaño original del código)
+        
+        // Reproducir animación idle
+        if (this.anims.exists('flying_enemy_idle')) {
+            enemy.play('flying_enemy_idle');
+        }
         
         // Propiedades del enemigo
         // Vida para aguantar ~4 disparos (20 daño c/u) y ~3 golpes (50 daño c/u)
@@ -2658,9 +3058,13 @@ class GameScene extends Phaser.Scene {
         const x = (side === 0) ? 200 : width - 200;
         const y = height * 0.3; // Spawn desde arriba para que caiga sobre las plataformas
 
-        const enemy = this.physics.add.sprite(x, y, 'tex_bullet');
-        enemy.setTint(0x33cc33); // Verde para diferenciar
-        enemy.setScale(2.6);
+        const enemy = this.physics.add.sprite(x, y, 'ground_enemy_walk', 0);
+        enemy.setScale(1.5); // Reducido de 2.6 a 1.5 (mucho más pequeño)
+        
+        // Reproducir animación de caminar
+        if (this.anims.exists('ground_enemy_walk')) {
+            enemy.play('ground_enemy_walk');
+        }
 
         // Propiedades
         enemy.type = 'ground';
@@ -2687,85 +3091,65 @@ class GameScene extends Phaser.Scene {
         this.physics.add.collider(enemy, this.groundGroup);
     }
 
-    // Jefe final: rectángulo grande con 3 ataques
+    // Jefe final: sprite animado limpio y funcional
     spawnBoss() {
         if (this.boss || this.bossActive) return;
-        // Asegurar que el jugador está operativo al entrar al jefe
-        try {
-            this.ensurePlayerSpriteValid();
-        } catch (e) { /* ignore */ }
+        try { this.ensurePlayerSpriteValid(); } catch (e) {}
+        
         const width = this.scale.width;
         const height = this.scale.height;
 
-        // Crear rectángulo pequeño como placeholder del jefe
-        const boss = this.add.rectangle(width * 0.5, height * 0.3, 60, 90, 0x7a00ff);
+        // Crear sprite del jefe
+        const boss = this.physics.add.sprite(width * 0.5, height * 0.3, 
+            this.textures.exists('boss_walk') ? 'boss_walk' : 'char0_idle', 0);
         boss.setDepth(5);
-        boss.setOrigin(0.5);
+        boss.setScale(1.8);
+        boss.setCollideWorldBounds(true);
         
-        this.physics.add.existing(boss);
-        boss.body.setAllowGravity(true);
-        boss.body.setCollideWorldBounds(true);
-        boss.body.setSize(60, 90); // Asegurar el tamaño del body
-        boss.body.setEnable(true); // Asegurar que el body esté activo
-        
-        this.physics.add.collider(boss, this.groundGroup);
-
-        // Propiedades del jefe (usar setData para que Phaser las preserve correctamente)
-        boss.setData('health', 1000);
-        boss.setData('maxHealth', 1000);
-        boss.setData('moveSpeed', 80);
-        boss.setData('lastShot', 0);
-        boss.setData('shotCooldown', 3500); // Disparar cada 3.5 segundos
-        boss.setData('lastAreaAttack', 0);
-        boss.setData('areaAttackCooldown', 8000); // Ataque de área cada 8 segundos
+        // Propiedades simples del jefe
+        boss.health = 1000;
+        boss.maxHealth = 1000;
+        boss.moveSpeed = 80;
+        boss.lastShot = 0;
+        boss.shotCooldown = 3500;
+        boss.lastAreaAttack = 0;
+        boss.areaAttackCooldown = 8000;
+        boss.lastJump = 0;
+        boss.reflecting = false;
 
         this.boss = boss;
         this.bossActive = true;
         this.waveText.setText('¡Jefe Final!');
-
-        // Crear barra de vida del jefe en la parte inferior
-        const barWidth = 600;
-        const barHeight = 30;
-        const barX = width / 2;
-        const barY = height - 50;
         
-        this.bossHealthBarBg = this.add.rectangle(barX, barY, barWidth, barHeight, 0x000000).setDepth(100);
-        this.bossHealthBar = this.add.rectangle(barX, barY, barWidth, barHeight, 0xff0066).setDepth(101);
-        this.bossHealthText = this.add.text(barX, barY, 'JEFE: 1000/1000', {
-            fontSize: '20px',
-            color: '#ffffff',
-            stroke: '#000000',
-            strokeThickness: 3
-        }).setOrigin(0.5).setDepth(102);
-
-        // Daño de proyectiles del jugador al jefe
-        this.bossOverlap = this.physics.add.overlap(this.projectiles, boss, (proj, b) => {
-            if (!proj || !proj.active) return;
+        // Collider con el suelo
+        this.physics.add.collider(boss, this.groundGroup);
+        
+        // Overlap: proyectiles del jugador impactan al jefe
+        this.physics.add.overlap(this.projectiles, boss, (proj, bossSprite) => {
+            if (!proj || !proj.active || !this.boss || !this.bossActive) return;
             
-            // IMPORTANTE: Usar this.boss (el Rectangle) en lugar del parámetro b (el ArcadeSprite wrapper)
-            const bossTarget = this.boss;
-            if (!bossTarget) return;
-            
-            // Obtener health usando getData del Rectangle original
-            let currentHealth = bossTarget.getData('health');
-            const maxHealth = bossTarget.getData('maxHealth') || 1000;
-            
-            console.log('BOSS DAMAGE - Current health:', currentHealth, 'Max health:', maxHealth);
-            
-            // Asegurar que el boss tiene vida inicializada
-            if (typeof currentHealth !== 'number') {
-                currentHealth = maxHealth;
-                bossTarget.setData('health', currentHealth);
-                bossTarget.setData('maxHealth', maxHealth);
+            // Si el jefe está reflejando, devolver proyectil
+            if (this.boss.reflecting) {
+                try { proj.setTint(0x66ccff); } catch (e) {}
+                const playerSprite = this.players[0] && this.players[0].sprite;
+                if (playerSprite && proj.body) {
+                    const ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, playerSprite.x, playerSprite.y);
+                    const curSpeed = Math.max(350, Math.hypot(proj.body.velocity.x || 0, proj.body.velocity.y || 0));
+                    proj.body.setVelocity(Math.cos(ang) * curSpeed, Math.sin(ang) * curSpeed);
+                    proj.rotation = ang;
+                }
+                proj.isReflected = true;
+                proj.shooter = -1;
+                // Cambiar de grupo sin destruir
+                this.projectiles.remove(proj, false, false);
+                this.enemyProjectiles.add(proj, false);
+                return;
             }
             
-            const damage = proj.damage || 20;
-            const newHealth = Math.max(0, currentHealth - damage);
-            bossTarget.setData('health', newHealth);
+            // Disparos al jefe: 3 de daño
+            this.boss.health = Math.max(0, this.boss.health - 3);
             
-            console.log('BOSS HIT! Health:', currentHealth, '->', newHealth, 'Damage:', damage);
-            
-            // Efecto visual de impacto
+            // Flash visual
             const flash = this.add.circle(proj.x, proj.y, 15, 0xff6600, 0.8).setDepth(10);
             this.tweens.add({
                 targets: flash,
@@ -2775,50 +3159,31 @@ class GameScene extends Phaser.Scene {
                 onComplete: () => { try { flash.destroy(); } catch (e) {} }
             });
             
+            // Destruir proyectil
             try { proj.destroy(); } catch (e) {}
         });
         
-        // Daño de ataques cuerpo a cuerpo del jugador al jefe
-        const playerSprite = this.players[0] && this.players[0].sprite;
-        if (playerSprite) {
-            this.bossPlayerOverlap = this.physics.add.overlap(playerSprite, boss, (player, b) => {
-                // Solo hacer daño cuando el jugador está atacando (animación punch)
-                const p0 = this.players[0];
-                if (!p0 || !p0.isAttacking) return;
-                
-                // Cooldown para evitar daño múltiple en un solo ataque
-                const now = this.time.now;
-                if (p0._lastBossMeleeHit && now - p0._lastBossMeleeHit < 500) return;
-                p0._lastBossMeleeHit = now;
-                
-                const bossTarget = this.boss;
-                if (!bossTarget) return;
-                
-                let currentHealth = bossTarget.getData('health');
-                const maxHealth = bossTarget.getData('maxHealth') || 1000;
-                
-                if (typeof currentHealth !== 'number') {
-                    currentHealth = maxHealth;
-                    bossTarget.setData('health', currentHealth);
-                    bossTarget.setData('maxHealth', maxHealth);
-                }
-                
-                const damage = 30; // Daño de melee
-                const newHealth = Math.max(0, currentHealth - damage);
-                bossTarget.setData('health', newHealth);
-                
-                console.log('BOSS MELEE HIT! Health:', currentHealth, '->', newHealth, 'Damage:', damage);
-                
-                // Efecto visual de impacto
-                const flash = this.add.circle(bossTarget.x, bossTarget.y, 20, 0xff3300, 0.8).setDepth(10);
-                this.tweens.add({
-                    targets: flash,
-                    alpha: 0,
-                    scale: 2,
-                    duration: 300,
-                    onComplete: () => { try { flash.destroy(); } catch (e) {} }
-                });
-            });
+        // Crear UNA sola barra de vida limpia
+        const barWidth = 600;
+        const barX = width / 2;
+        const barY = height - 50;
+        
+        if (this.bossHealthBarBg) this.bossHealthBarBg.destroy();
+        if (this.bossHealthBar) this.bossHealthBar.destroy();
+        if (this.bossHealthText) this.bossHealthText.destroy();
+        
+        this.bossHealthBarBg = this.add.rectangle(barX, barY, barWidth, 30, 0x000000).setDepth(100).setScrollFactor(0);
+        this.bossHealthBar = this.add.rectangle(barX, barY, barWidth, 30, 0xff0066).setDepth(101).setScrollFactor(0);
+        this.bossHealthText = this.add.text(barX, barY, 'JEFE: 1000/1000', {
+            fontSize: '20px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(102).setScrollFactor(0);
+        
+        // Animación inicial
+        if (this.anims.exists('boss_idle')) {
+            try { boss.play('boss_idle'); } catch (e) {}
         }
     }
 
@@ -2831,19 +3196,20 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(700, () => { try { if (spike && spike.scene) spike.destroy(); } catch (e) {} });
     }
 
+
     bossShootAtPlayer() {
         if (!this.boss || !this.players[0] || !this.players[0].sprite) return;
-        const player = this.players[0].sprite;
         const b = this.boss;
+        const player = this.players[0].sprite;
         const angle = Phaser.Math.Angle.Between(b.x, b.y, player.x, player.y);
+        
         const proj = this.physics.add.sprite(b.x, b.y - 40, 'tex_bullet');
         proj.setTint(0x9933ff);
         proj.setScale(2.2);
         proj.damage = 50;
         this.enemyProjectiles.add(proj);
         proj.body.setAllowGravity(false);
-        const speed = 460;
-        proj.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+        proj.body.setVelocity(Math.cos(angle) * 460, Math.sin(angle) * 460);
         proj.rotation = angle;
         this.time.delayedCall(3500, () => { if (proj && proj.active) proj.destroy(); });
     }
@@ -2851,63 +3217,57 @@ class GameScene extends Phaser.Scene {
     updateBoss(time) {
         if (!this.bossActive || !this.boss || this.mode !== 'cooperativo') return;
         const b = this.boss;
-        if (!b.scene) { this.bossActive = false; this.boss = null; return; }
-        
-        // Asegurar que el boss sea visible
-        b.setVisible(true);
-        b.setActive(true);
-        b.setAlpha(1);
-        
-        // Asegurar que el boss tenga health inicializada
-        if (typeof b.getData('health') !== 'number') {
-            b.setData('health', 1000);
-            b.setData('maxHealth', 1000);
-        }
+        if (!b || !b.scene) { this.bossActive = false; this.boss = null; return; }
         
         const player = this.players[0] && this.players[0].sprite;
         if (!player) return;
 
-        // Movimiento sencillo hacia el jugador
+        // Movimiento hacia el jugador
         const dir = (player.x > b.x) ? 1 : -1;
-        try { b.body.setVelocityX(dir * (b.getData('moveSpeed') || 80)); } catch (e) {}
+        b.body.setVelocityX(dir * b.moveSpeed);
+        
+        // Voltear sprite según dirección (false = derecha, true = izquierda)
+        b.flipX = (dir < 0);
+        
+        // Salto automático si está bloqueado o jugador arriba
+        const onFloor = b.body.blocked.down || b.body.touching.down;
+        const blocked = b.body.blocked.left || b.body.blocked.right;
+        const playerAbove = player.y < (b.y - 40);
+        if (onFloor && (blocked || playerAbove) && (time - b.lastJump > 800)) {
+            b.body.setVelocityY(-600); // Salto más alto
+            b.lastJump = time;
+        }
+        
+        // Animación idle/move
+        if (this.anims.exists('boss_move') && this.anims.exists('boss_idle')) {
+            const moving = Math.abs(b.body.velocity.x) > 10;
+            if (moving && (!b.anims.isPlaying || b.anims.currentAnim.key !== 'boss_move')) {
+                b.play('boss_move');
+            } else if (!moving && (!b.anims.isPlaying || b.anims.currentAnim.key !== 'boss_idle')) {
+                b.play('boss_idle');
+            }
+        }
 
-        // Actualizar barra de vida del jefe
+        // Actualizar barra de vida
         if (this.bossHealthBar && this.bossHealthText) {
-            const health = b.getData('health');
-            const maxHealth = b.getData('maxHealth') || 1000;
-            const healthPercent = Math.max(0, health / maxHealth);
-            const barWidth = 600;
-            this.bossHealthBar.width = barWidth * healthPercent;
-            this.bossHealthText.setText(`JEFE: ${Math.ceil(health)}/${maxHealth}`);
+            const healthPercent = Math.max(0, b.health / b.maxHealth);
+            this.bossHealthBar.width = 600 * healthPercent;
+            this.bossHealthText.setText(`JEFE: ${Math.ceil(b.health)}/${b.maxHealth}`);
         }
 
-        // Spawn de enemigos durante la fase del jefe (máximo 5)
-        if (!this._bossEnemySpawnTimer) this._bossEnemySpawnTimer = 0;
-        if (!this._bossEnemiesCount) this._bossEnemiesCount = 0;
-        
-        // Contar enemigos activos
-        this._bossEnemiesCount = this.enemies ? this.enemies.children.entries.filter(e => e.active).length : 0;
-        
-        // Spawn cada 10 segundos si hay menos de 5 enemigos
-        if (time - this._bossEnemySpawnTimer > 10000 && this._bossEnemiesCount < 5) {
-            this._bossEnemySpawnTimer = time;
-            // Alternar entre voladores y terrestres
-            const spawnType = Phaser.Math.Between(0, 1);
-            if (spawnType === 0) this.spawnFlyingEnemy();
-            else this.spawnGroundEnemy();
-        }
-
-        // Disparo de proyectil
-        if (time - (b.getData('lastShot') || 0) > (b.getData('shotCooldown') || 3500)) {
-            b.setData('lastShot', time);
+        // Disparar cada 3.5s
+        if (time - b.lastShot > b.shotCooldown) {
+            b.lastShot = time;
             this.bossShootAtPlayer();
         }
 
-        // Ataque de área (radio 300): daña solo si el jugador está dentro del radio
+        // Ataque de área cada 8s
         const dist = Phaser.Math.Distance.Between(b.x, b.y, player.x, player.y);
-        if (time - (b.getData('lastAreaAttack') || 0) > (b.getData('areaAttackCooldown') || 8000)) {
-            b.setData('lastAreaAttack', time);
-            // Crear efecto visual del área
+        if (time - b.lastAreaAttack > b.areaAttackCooldown) {
+            b.lastAreaAttack = time;
+            b.reflecting = true;
+            
+            // Efecto visual AoE
             const areaCircle = this.add.circle(b.x, b.y, 300, 0xff0066, 0.3).setDepth(4);
             this.tweens.add({
                 targets: areaCircle,
@@ -2916,36 +3276,31 @@ class GameScene extends Phaser.Scene {
                 duration: 800,
                 onComplete: () => { try { areaCircle.destroy(); } catch (e) {} }
             });
-            // Aplicar daño solo si el jugador está dentro del radio
+            
+            // Daño si jugador dentro del radio
             if (dist < 300) {
                 this.applyDamageToPlayer(0, 100);
                 this.cameras.main.shake(200, 0.02);
             }
+            
+            // Desactivar reflejo tras 5s
+            this.time.delayedCall(5000, () => { if (b) b.reflecting = false; });
         }
 
         // Muerte del jefe
-        const bossHealth = b.getData('health');
-        if (bossHealth != null && bossHealth <= 0) {
-            // Destruir el collider antes de destruir el jefe
-            if (this.bossOverlap) {
-                try { this.physics.world.removeCollider(this.bossOverlap); } catch (e) {}
-                this.bossOverlap = null;
-            }
-            // Limpiar barra de vida del jefe
-            try {
-                if (this.bossHealthBarBg) this.bossHealthBarBg.destroy();
-                if (this.bossHealthBar) this.bossHealthBar.destroy();
-                if (this.bossHealthText) this.bossHealthText.destroy();
-            } catch (e) {}
-            try { if (b && b.scene) b.destroy(); } catch (e) {}
+        if (b.health <= 0) {
+            if (this.bossHealthBarBg) this.bossHealthBarBg.destroy();
+            if (this.bossHealthBar) this.bossHealthBar.destroy();
+            if (this.bossHealthText) this.bossHealthText.destroy();
+            
+            try { b.destroy(); } catch (e) {}
             this.boss = null;
             this.bossActive = false;
-            // Ir a escena de victoria en cooperativo
+            
             try {
                 this.scene.launch('VictoryScene', { mode: this.mode });
                 this.scene.stop();
             } catch (e) {
-                console.warn('Failed to launch VictoryScene:', e);
                 this.waveText.setText('¡Victoria! Jefe derrotado');
             }
         }
@@ -2981,6 +3336,13 @@ class GameScene extends Phaser.Scene {
                 // Movimiento horizontal hacia el jugador
                 const dir = (playerSprite.x > enemy.x) ? 1 : -1;
                 enemy.setVelocityX(dir * (enemy.moveSpeed || 90));
+                
+                // Voltear el sprite según la dirección del movimiento
+                if (dir > 0) {
+                    enemy.flipX = false; // Mirando a la derecha
+                } else {
+                    enemy.flipX = true; // Mirando a la izquierda
+                }
 
                 // Si el jugador está más alto, intentar saltar con cooldown
                 const now = time || this.time.now;
@@ -3002,6 +3364,18 @@ class GameScene extends Phaser.Scene {
                     now >= playerIframesUntil
                 ) {
                     enemy.lastMelee = now;
+                    
+                    // Reproducir animación de ataque
+                    if (enemy.texture && enemy.texture.key === 'ground_enemy_walk' && this.anims.exists('ground_enemy_attack')) {
+                        enemy.play('ground_enemy_attack');
+                        // Volver a caminar después de la animación
+                        enemy.once('animationcomplete', () => {
+                            if (enemy.active && this.anims.exists('ground_enemy_walk')) {
+                                enemy.play('ground_enemy_walk');
+                            }
+                        });
+                    }
+                    
                     // Daño fijo de 45
                     this.applyDamageToPlayer(0, 45);
                     // Reducir el tiempo de stun específico de este golpe
@@ -3024,7 +3398,43 @@ class GameScene extends Phaser.Scene {
         const player = this.players[0].sprite;
         const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, player.x, player.y);
         
-        // Crear proyectil enemigo más grande
+        // Reproducir animación de disparo si es un enemigo volador
+        if (enemy.isFlying && enemy.texture && enemy.texture.key === 'flying_enemy') {
+            if (this.anims.exists('flying_enemy_shoot')) {
+                enemy.play('flying_enemy_shoot');
+                // Disparar al terminar la animación
+                enemy.once('animationcomplete', () => {
+                    // Crear proyectil enemigo después de la animación
+                    const proj = this.physics.add.sprite(enemy.x, enemy.y, 'tex_bullet');
+                    proj.setTint(0xff6600); // Color naranja para proyectiles enemigos
+                    proj.setScale(2.5); // Hacer el proyectil más grande
+                    proj.damage = 35;
+                    
+                    this.enemyProjectiles.add(proj);
+                    proj.body.setAllowGravity(false);
+                    
+                    const speed = 400;
+                    const vx = Math.cos(angle) * speed;
+                    const vy = Math.sin(angle) * speed;
+                    proj.body.setVelocity(vx, vy);
+                    proj.rotation = angle;
+                    
+                    // Destruir después de 3 segundos
+                    this.time.delayedCall(3000, () => {
+                        if (proj && proj.active) proj.destroy();
+                    });
+                    
+                    // Volver a idle después de disparar
+                    if (enemy.active && this.anims.exists('flying_enemy_idle')) {
+                        enemy.play('flying_enemy_idle');
+                    }
+                });
+                // No crear proyectil inmediatamente, esperar a la animación
+                return;
+            }
+        }
+        
+        // Para enemigos que no tienen animación de disparo, disparar inmediatamente
         const proj = this.physics.add.sprite(enemy.x, enemy.y, 'tex_bullet');
         proj.setTint(0xff6600); // Color naranja para proyectiles enemigos
         proj.setScale(2.5); // Hacer el proyectil más grande
@@ -4142,79 +4552,118 @@ class GameScene extends Phaser.Scene {
             // Gasta energía
             player.energy = Math.max(0, player.energy - 150);
 
-            // origen del láser
-            const sx = sprite.x;
+            // Crear sprite del láser con animación
+            const sx = sprite.x + (sprite.flipX ? -20 : 20);
             const sy = sprite.y - 10;
-
-            // direccional: hacia el enemigo actual (pero se extiende mucho para atravesar)
-            const target = this.players[1 - i];
-            const dx = (target.sprite.x - sx);
-            const dy = (target.sprite.y - sy);
-            const len = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-            const nx = dx / len;
-            const ny = dy / len;
-
-            // extremo lejano del láser
-            const EXT = 2000;
-            const ex = sx + nx * EXT;
-            const ey = sy + ny * EXT;
-
-            // dibuja línea láser (visual)
-            const laser = this.add.line(0, 0, sx, sy, ex, ey, 0xffcc00).setOrigin(0, 0);
-            try { laser.setLineWidth(8); } catch(e){} // no-crash si no disponible
-            laser.setDepth(50);
-
-            // helper: distancia punto - segmento
-            const pointLineDist = (px, py, x1, y1, x2, y2) => {
-                const A = px - x1;
-                const B = py - y1;
-                const C = x2 - x1;
-                const D = y2 - y1;
-                const dot = A * C + B * D;
-                const len_sq = C * C + D * D;
-                const t = Math.max(0, Math.min(1, len_sq === 0 ? 0 : dot / len_sq));
-                const projx = x1 + t * C;
-                const projy = y1 + t * D;
-                const dx2 = px - projx;
-                const dy2 = py - projy;
-                return Math.sqrt(dx2 * dx2 + dy2 * dy2);
-            };
-
-            // daño base y umbral de colisión al láser
+            
+            const laserSprite = this.add.sprite(sx, sy, 'mario_laser_sangre', 0);
+            laserSprite.setOrigin(0, 0.5);
+            laserSprite.setDepth(50);
+            laserSprite.flipX = sprite.flipX;
+            
+            // Reproducir animación de alargamiento
+            if (this.anims.exists('mario_laser_sangre')) {
+                laserSprite.play('mario_laser_sangre');
+            }
+            
+            // Extender el láser en la dirección del jugador
+            const direction = sprite.flipX ? -1 : 1;
+            const maxReach = 800; // alcance máximo del láser
+            
+            // Daño base
             const baseDamage = 100;
-            const hitThreshold = 40; // px de ancho efectivo
-
-            // Aplica efecto a todos los jugadores excepto el que dispara (atraviesa)
-            for (let j = 0; j < this.players.length; j++) {
-                if (!this.players[j] || !this.players[j].sprite) continue;
-                if (j === i) continue; // no pegarse a sí mismo
-
-                const pSprite = this.players[j].sprite;
-                const distToLine = pointLineDist(pSprite.x, pSprite.y, sx, sy, ex, ey);
-                if (distToLine <= hitThreshold) {
-                    // Está alcanzado por el láser
-                    if (!this.players[j].blocking) {
-                        this.players[j].health = Math.max(0, this.players[j].health - baseDamage);
-                    } else {
-                        // si bloquea, daño reducido (misma lógica que proyectiles)
-                        this.players[j].health = Math.max(0, this.players[j].health - Math.floor(baseDamage * 0.35));
+            const hitWidth = 60; // ancho del hitbox del láser
+            
+            // En modo cooperativo, dañar enemigos y jefe
+            if (this.mode === 'cooperativo') {
+                // Dañar enemigos
+                if (this.enemies) {
+                    this.enemies.children.entries.forEach(enemy => {
+                        if (!enemy.active) return;
+                        
+                        const distX = Math.abs(enemy.x - sx);
+                        const distY = Math.abs(enemy.y - sy);
+                        const inRange = (direction > 0) ? (enemy.x > sx && enemy.x < sx + maxReach) : (enemy.x < sx && enemy.x > sx - maxReach);
+                        
+                        if (inRange && distY < hitWidth) {
+                            enemy.health -= baseDamage;
+                            
+                            // Empuje
+                            enemy.setVelocityX(400 * direction);
+                            enemy.setVelocityY(-100);
+                            
+                            // Destruir si muere
+                            if (enemy.health <= 0) {
+                                if (enemy.healthBar) enemy.healthBar.destroy();
+                                if (enemy.healthBarBg) enemy.healthBarBg.destroy();
+                                enemy.destroy();
+                                this.checkWaveComplete();
+                            }
+                        }
+                    });
+                }
+                
+                // Dañar jefe
+                if (this.bossActive && this.boss) {
+                    const distX = Math.abs(this.boss.x - sx);
+                    const distY = Math.abs(this.boss.y - sy);
+                    const inRange = (direction > 0) ? (this.boss.x > sx && this.boss.x < sx + maxReach) : (this.boss.x < sx && this.boss.x > sx - maxReach);
+                    
+                    if (inRange && distY < hitWidth) {
+                        this.boss.health = Math.max(0, this.boss.health - 15); // Cap de 15 como melee
+                        
+                        // Empuje
+                        if (this.boss.body) {
+                            this.boss.body.setVelocity(220 * direction, -120);
+                        }
+                        
+                        // Flash visual
+                        const flash = this.add.circle(this.boss.x, this.boss.y, 30, 0xff3300, 0.8).setDepth(10);
+                        this.tweens.add({
+                            targets: flash,
+                            alpha: 0,
+                            scale: 2,
+                            duration: 300,
+                            onComplete: () => { try { flash.destroy(); } catch (e) {} }
+                        });
                     }
-                    // stun corto
-                    this.players[j].beingHit = true;
-                    this.players[j].hitTimer = this.time.now + 300;
-                    // un pequeño empuje opcional si no bloquea
-                    if (!this.players[j].blocking) {
-                        const pushDir = (this.players[j].sprite.x > sprite.x) ? 1 : -1;
-                        this.players[j].sprite.setVelocityX(180 * pushDir);
-                    } else {
-                        this.players[j].sprite.setVelocityX(0);
+                }
+            } else {
+                // Modo PvP: dañar al otro jugador
+                const target = this.players[1 - i];
+                if (target && target.sprite) {
+                    const distX = Math.abs(target.sprite.x - sx);
+                    const distY = Math.abs(target.sprite.y - sy);
+                    const inRange = (direction > 0) ? (target.sprite.x > sx && target.sprite.x < sx + maxReach) : (target.sprite.x < sx && target.sprite.x > sx - maxReach);
+                    
+                    if (inRange && distY < hitWidth) {
+                        if (!target.blocking) {
+                            target.health = Math.max(0, target.health - baseDamage);
+                        } else {
+                            target.health = Math.max(0, target.health - Math.floor(baseDamage * 0.35));
+                        }
+                        target.beingHit = true;
+                        target.hitTimer = this.time.now + 300;
+                        
+                        if (!target.blocking) {
+                            target.sprite.setVelocityX(180 * direction);
+                        }
                     }
                 }
             }
 
-            // cámara y feedback visual
+            // Feedback visual
             this.cameras.main.flash(120, 255, 200, 80);
-            this.time.delayedCall(160, () => { if (laser && laser.scene) laser.destroy(); });
+            
+            // Destruir el sprite del láser después de la animación
+            laserSprite.once('animationcomplete', () => {
+                try { laserSprite.destroy(); } catch (e) {}
+            });
+            
+            // Fallback por si no hay animación
+            this.time.delayedCall(1000, () => {
+                if (laserSprite && laserSprite.scene) laserSprite.destroy();
+            });
 
             // Limpiar buffer
             player.marioBeamBuffer = [];
