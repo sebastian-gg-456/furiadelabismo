@@ -1516,7 +1516,6 @@ class GameScene extends Phaser.Scene {
                     player.sofiaMeteorBuffer = [];
                 }
             }
-        }
 
         handleSofiaRobo(i, time) {
             if (this.mode === 'cooperativo') return; // disable PvP Sofia robo in coop
@@ -2035,7 +2034,7 @@ class GameScene extends Phaser.Scene {
                 const sx = sprite.x;
                 const sy = sprite.y - 10;
 
-                // direccional: hacia el enemigo actual (pero se extiende mucho para atravesar)
+                // direccional: hacia el enemigo actual
                 const target = this.players[1 - i];
                 const dx = (target.sprite.x - sx);
                 const dy = (target.sprite.y - sy);
@@ -2043,15 +2042,41 @@ class GameScene extends Phaser.Scene {
                 const nx = dx / len;
                 const ny = dy / len;
 
-                // extremo lejano del láser
-                const EXT = 2000;
+                // Longitud hasta el objetivo (clamp por seguridad)
+                const EXT = Math.min(2000, len);
                 const ex = sx + nx * EXT;
                 const ey = sy + ny * EXT;
 
-                // dibuja línea láser (visual)
-                const laser = this.add.line(0, 0, sx, sy, ex, ey, 0xffcc00).setOrigin(0, 0);
-                try { laser.setLineWidth(8); } catch(e){} // no-crash si no disponible
-                laser.setDepth(50);
+                // Visual del láser: usar animación si existe; si no, fallback a línea
+                let laser = null;
+                let usedSpriteLaser = false;
+                if (this.textures.exists('mario_laser_sangre')) {
+                    const beam = this.add.sprite(sx, sy, 'mario_laser_sangre')
+                        .setOrigin(0, 0.5)
+                        .setDepth(50);
+                    // Rotar hacia el objetivo
+                    const angle = Math.atan2(ey - sy, ex - sx);
+                    beam.rotation = angle;
+                    // Escalar a la longitud requerida (frame base width = 104)
+                    const baseW = 104;
+                    beam.setScale(EXT / baseW, 1);
+                    // Reproducir animación si está registrada
+                    if (this.anims.exists('mario_laser_sangre')) {
+                        try { beam.anims.play('mario_laser_sangre', true); } catch (e) {}
+                    }
+                    // Destruir al finalizar (fallback timeout por si acaso)
+                    beam.on('animationcomplete', () => { if (beam && beam.scene) beam.destroy(); });
+                    this.time.delayedCall(250, () => { if (beam && beam.scene) beam.destroy(); });
+                    laser = beam;
+                    usedSpriteLaser = true;
+                } else {
+                    // Fallback: línea simple si falta la textura
+                    const line = this.add.line(0, 0, sx, sy, ex, ey, 0xffcc00).setOrigin(0, 0);
+                    try { line.setLineWidth(8); } catch (e) {}
+                    line.setDepth(50);
+                    laser = line;
+                    this.time.delayedCall(160, () => { if (laser && laser.scene) laser.destroy(); });
+                }
 
                 // helper: distancia punto - segmento
                 const pointLineDist = (px, py, x1, y1, x2, y2) => {
@@ -2103,7 +2128,7 @@ class GameScene extends Phaser.Scene {
 
                 // cámara y feedback visual
                 this.cameras.main.flash(120, 255, 200, 80);
-                this.time.delayedCall(160, () => { if (laser && laser.scene) laser.destroy(); });
+                // si usamos sprite animado, ya tiene su propio destroy; si no, ya se programó arriba
 
                 // Limpiar buffer
                 player.marioBeamBuffer = [];

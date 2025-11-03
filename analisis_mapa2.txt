@@ -1,0 +1,101 @@
+ANÁLISIS DEL MAPA 2 - PLATAFORMAS
+====================================
+
+Dimensiones del mapa:
+- Ancho: 30 tiles (30 * 32px = 960px)
+- Alto: 20 tiles (20 * 32px = 640px)
+- Cada tile: 32x32 píxeles
+
+CAPA "suelo" (donde 0 = vacío, número > 0 = sólido):
+=====================================================
+
+Visualización (X = tile sólido, . = vacío):
+
+Fila 00: ..............................
+Fila 01: ..............................
+Fila 02: ..............................
+Fila 03: .....................X........  <- Plataforma pequeña en col 21
+Fila 04: ....................XX........  <- Plataforma en cols 20-21
+Fila 05: .......X...X.....X..XXX......  <- Plataformas flotantes
+Fila 06: .......XXXX XXXXX X..........  <- Plataforma grande
+Fila 07: .....................XXXXXXX..  <- Plataforma derecha
+Fila 08: ...................XXXX.......  <- Plataforma pequeña
+Fila 09: XXXXX..........XXX..XX........  <- Plataforma izquierda + centro
+Fila 10: XXXX...XX..........XXXX.......  <- Múltiples plataformas
+Fila 11: XXXX........XX........XX......  <- Plataformas separadas
+Fila 12: XXXX.........XXXXXXX..........  <- Plataforma central larga
+Fila 13: XXXX..........................  <- Pared izquierda
+Fila 14: XXXX............XX....XX......  <- Columnas + pared
+Fila 15: XXXX............XX............  <- Columnas + pared
+Fila 16: XXXX............XXXXXX........  <- Plataforma + pared
+Fila 17: XXXX..........................  <- Pared izquierda
+Fila 18: XXXX..........................  <- Pared izquierda (suelo)
+Fila 19: XXXX..........................  <- Pared izquierda (suelo)
+
+
+PLATAFORMAS IDENTIFICADAS (en coordenadas de tiles):
+======================================================
+
+1. PARED IZQUIERDA (cols 0-3, filas 9-19) - 4 tiles ancho
+   - Es una pared vertical del lado izquierdo
+
+2. PLATAFORMA SUPERIOR DERECHA (fila 3, col 21)
+   - Tile individual flotante
+
+3. PLATAFORMA FLOTANTE PEQUEÑA (fila 4, cols 20-21)
+   - 2 tiles de ancho
+
+4. PLATAFORMAS FLOTANTES MEDIAS (fila 5)
+   - Col 7: 1 tile
+   - Col 10: 1 tile  
+   - Col 15: 1 tile
+   - Cols 18-20: 3 tiles
+
+5. PLATAFORMA GRANDE MEDIA-ALTA (fila 6, cols 7-14)
+   - Aproximadamente 8 tiles de ancho
+   - Con algunos huecos
+
+6. PLATAFORMA DERECHA ALTA (fila 7, cols 21-27)
+   - 7 tiles de ancho
+
+7. PLATAFORMA PEQUEÑA (fila 8, cols 19-22)
+   - 4 tiles de ancho
+
+8. PLATAFORMAS FILA 9:
+   - Izquierda: cols 0-4 (5 tiles)
+   - Centro: cols 12-14 (3 tiles)
+   - Derecha: cols 20-21 (2 tiles)
+
+9. PLATAFORMAS FILA 10:
+   - Izquierda: cols 0-3 (4 tiles)
+   - Media: cols 7-8 (2 tiles)
+   - Derecha: cols 17-20 (4 tiles)
+
+10. PLATAFORMAS FILA 11:
+    - Izquierda: cols 0-3 (4 tiles)
+    - Centro: cols 9-10 (2 tiles)
+    - Derecha: cols 17-18 (2 tiles)
+
+11. PLATAFORMA CENTRAL LARGA (fila 12, cols 10-16)
+    - 7 tiles de ancho
+
+12-19. SUELO Y COLUMNAS (filas 13-19)
+    - Pared izquierda continua (cols 0-3)
+    - Columnas decorativas en filas 14-16 (cols 14-15)
+    - Plataforma en fila 16 (cols 14-19)
+
+
+CONVERSIÓN A PÍXELES (para game.js):
+=====================================
+
+Fórmula: 
+- X = columna * 32 + 16 (centro del tile)
+- Y = fila * 32 + 16 (centro del tile)
+- Width = número_de_tiles * 32
+- Height = 32 (generalmente)
+
+Ejemplo para plataforma en fila 6, cols 7-14:
+- X = ((7 + 14) / 2) * 32 + 16 = 352px (centro)
+- Y = 6 * 32 + 16 = 208px
+- Width = 8 * 32 = 256px
+- Height = 32px

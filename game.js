@@ -43,6 +43,147 @@ if (typeof window !== 'undefined') {
     });
 }
 
+// Helper global: reproducir música de menú en bucle en escenas de menú
+function ensureMenuMusic(scene) {
+    try {
+        const game = scene.game;
+        if (!game) return;
+        // Si ya existe y fue destruida, limpiar referencia
+        if (game.menuMusic && game.menuMusic.isDestroyed) game.menuMusic = null;
+        if (!game.menuMusic && scene.sound && scene.sound.add) {
+            try {
+                game.menuMusic = scene.sound.add('menu_music', { loop: true, volume: 0.5 });
+            } catch (e) {
+                game.menuMusic = null;
+            }
+        }
+        // Intentar reproducir vía WebAudio
+        let webAudioStarted = false;
+        if (game.menuMusic && !game.menuMusic.isPlaying) {
+            try { game.menuMusic.play(); webAudioStarted = true; } catch (e) { webAudioStarted = false; }
+        } else if (game.menuMusic && game.menuMusic.isPlaying) {
+            webAudioStarted = true;
+        }
+
+        // Fallback: usar HTMLAudio si WebAudio falla o no se cargó/decodificó
+        if (!webAudioStarted) {
+            if (!game.menuMusicTag) {
+                try {
+                    const tag = new Audio('/assets/musica-menu.mp3');
+                    tag.loop = true;
+                    tag.volume = 0.5;
+                    game.menuMusicTag = tag;
+                } catch (e) { /* ignore */ }
+            }
+            const tag = game.menuMusicTag;
+            if (tag && tag.paused) {
+                // Requisitos de interacción del usuario pueden impedir auto-play; ignoramos error
+                tag.play().catch(() => {});
+            }
+        }
+    } catch (e) { /* ignore */ }
+}
+
+function stopMenuMusic(scene) {
+    try {
+        const game = scene.game;
+        if (!game) return;
+        // Detener WebAudio si existe
+        if (game.menuMusic) {
+            try { 
+                if (game.menuMusic.isPlaying) {
+                    game.menuMusic.stop(); 
+                }
+                // Destruir el objeto para evitar que se reactive
+                if (game.menuMusic.destroy) {
+                    game.menuMusic.destroy();
+                }
+                game.menuMusic = null;
+            } catch (e) { /* ignore */ }
+        }
+        // Detener HTMLAudio si existe
+        if (game.menuMusicTag) {
+            try { 
+                game.menuMusicTag.pause(); 
+                game.menuMusicTag.currentTime = 0;
+                // Remover src para liberar el recurso
+                game.menuMusicTag.src = '';
+                game.menuMusicTag = null;
+            } catch (e) { /* ignore */ }
+        }
+    } catch (e) { /* ignore */ }
+}
+
+// Helper global: reproducir música de batalla (versus/coop) en bucle
+function ensureBattleMusic(scene) {
+    try {
+        const game = scene.game;
+        if (!game) return;
+        // Si ya existe y fue destruida, limpiar referencia
+        if (game.battleMusic && game.battleMusic.isDestroyed) game.battleMusic = null;
+        if (!game.battleMusic && scene.sound && scene.sound.add) {
+            try {
+                game.battleMusic = scene.sound.add('battle_music', { loop: true, volume: 0.5 });
+            } catch (e) {
+                game.battleMusic = null;
+            }
+        }
+        // Intentar reproducir vía WebAudio
+        let webAudioStarted = false;
+        if (game.battleMusic && !game.battleMusic.isPlaying) {
+            try { game.battleMusic.play(); webAudioStarted = true; } catch (e) { webAudioStarted = false; }
+        } else if (game.battleMusic && game.battleMusic.isPlaying) {
+            webAudioStarted = true;
+        }
+
+        // Fallback: usar HTMLAudio si WebAudio falla o no se cargó/decodificó
+        if (!webAudioStarted) {
+            if (!game.battleMusicTag) {
+                try {
+                    const tag = new Audio('/assets/musica-pelea.mp3');
+                    tag.loop = true;
+                    tag.volume = 0.5;
+                    game.battleMusicTag = tag;
+                } catch (e) { /* ignore */ }
+            }
+            const tag = game.battleMusicTag;
+            if (tag && tag.paused) {
+                tag.play().catch(() => {});
+            }
+        }
+    } catch (e) { /* ignore */ }
+}
+
+function stopBattleMusic(scene) {
+    try {
+        const game = scene.game;
+        if (!game) return;
+        // Detener WebAudio si existe
+        if (game.battleMusic) {
+            try { 
+                if (game.battleMusic.isPlaying) {
+                    game.battleMusic.stop(); 
+                }
+                // Destruir el objeto para evitar que se reactive
+                if (game.battleMusic.destroy) {
+                    game.battleMusic.destroy();
+                }
+                game.battleMusic = null;
+            } catch (e) { /* ignore */ }
+        }
+        // Detener HTMLAudio si existe
+        if (game.battleMusicTag) {
+            try { 
+                game.battleMusicTag.pause(); 
+                game.battleMusicTag.currentTime = 0;
+                // Remover src para liberar el recurso
+                game.battleMusicTag.src = '';
+                game.battleMusicTag = null;
+            } catch (e) { /* ignore */ }
+        }
+    } catch (e) { /* ignore */ }
+}
+
 // --- ESCENA PRELOADER ---
 class Preloader extends Phaser.Scene {
     constructor() { super("Preloader"); }
@@ -52,8 +193,13 @@ class Preloader extends Phaser.Scene {
 
         const mapping = {
             repo1: {
-                walk: 'repo1/caminar-derecha.png', idle: 'repo1/mirar-derecha.png', shoot: 'repo1/disparo-derecha.png',
-                punch: 'repo1/golpe-derecha.png', punch_fire: 'repo1/golpe-fuego-derecha.png', kick: 'repo1/patada-derecha.png',
+                // Charles (pj1) - reemplazos solicitados
+                // idle: usar primer frame de pj1-golpe
+                // walk: pj1-caminar (frames 0-3)
+                // punch: pj1-golpe (frames 0-3)
+                // punch_fire (combo que quema): pj1-skill1 (frames 0-6)
+                walk: 'pj1/pj1-caminar.png', idle: 'pj1/pj1-golpe.png', shoot: 'repo1/disparo-derecha.png',
+                punch: 'pj1/pj1-golpe.png', punch_fire: 'pj1/pj1-skill1.png', kick: 'repo1/patada-derecha.png',
                 block: 'repo1/bloqueo-derecha.png', charge: 'repo1/carga-energia-derecha.png',
                 hurt: 'repo1/caminar-herido-derecha.png', jump: 'repo1/salto-derecha.png'
             },
@@ -65,8 +211,13 @@ class Preloader extends Phaser.Scene {
                 hurt: 'pj2/pj2-disparo.png', jump: 'pj2/pj2-disparo.png'
             },
             repo3: {
-                walk: 'repo3/caminar3-derecha.png', idle: 'repo3/mirar3-derecha.png', shoot: 'repo3/disparo3-derecha.png',
-                punch: 'repo3/golpe3-derecha.png', robo: 'repo3/robo3-derecha.png', block: 'repo3/bloqueo3-derecha.png', charge: 'repo3/carga3-energia-derecha.png',
+                // Franchesca (pj3)
+                // Caminar: pj3-caminar (0-3), Idle: usar SIEMPRE el frame 3 de pj3-caminar
+                // Golpe: pj3-ataque2 (0-3)
+                // Disparo: usar solo frame 2 de pj3-ataque2
+                // Robo: usar también frame 2 de pj3-ataque2
+                walk: 'pj3/pj3-caminar.png', idle: 'pj3/pj3-caminar.png', shoot: 'pj3/pj3-ataque2.png',
+                punch: 'pj3/pj3-ataque2.png', robo: 'pj3/pj3-ataque2.png', block: 'repo3/bloqueo3-derecha.png', charge: 'repo3/carga3-energia-derecha.png',
                 hurt: 'repo3/caminar3-herido-derecha.png', jump: 'repo3/salto3-derecha.png'
             },
             repo4: {
@@ -91,108 +242,107 @@ class Preloader extends Phaser.Scene {
         // Guardar mapping para recargas posteriores
         this._mapping = mapping;
 
-    // Cargar imagen del mapa 1 desde public/mapas (servida en la raíz)
-    // Nota: coloca tu archivo en public/mapas/mapaprov.png
-    // Intentamos la ruta relativa primero (mapas/mapaprov.png). Si falla, reintentamos con la ruta absoluta '/mapas/mapaprov.png'.
-    this._map1Retry = false;
-    this.load.image('map1', 'mapas/mapaprov.png');
-    this.load.on('loaderror', (file) => {
-        try {
-            if (file && file.key === 'map1' && !this._map1Retry) {
-                console.warn('map1 failed to load (relative), retrying with absolute path');
-                this._map1Retry = true;
-                this.load.image('map1', '/mapas/mapaprov.png');
-                this.load.start();
-            }
-    } catch (e) { /* ignore */ }
-}, this);
+        // Cargar imagen del mapa 1 desde public/mapas (servida en la raíz)
+        // Nota: coloca tu archivo en public/mapas/mapaprov.png
+        // Intentamos la ruta relativa primero (mapas/mapaprov.png). Si falla, reintentamos con la ruta absoluta '/mapas/mapaprov.png'.
+        this._map1Retry = false;
+        this.load.image('map1', 'mapas/mapaprov.png');
+        this.load.on('loaderror', (file) => {
+            try {
+                if (file && file.key === 'map1' && !this._map1Retry) {
+                    console.warn('map1 failed to load (relative), retrying with absolute path');
+                    this._map1Retry = true;
+                    this.load.image('map1', '/mapas/mapaprov.png');
+                    this.load.start();
+                }
+            } catch (e) { /* ignore */ }
+        }, this);
 
-// Cargar Mapa 2 (Tiled JSON + tileset + fondo) desde public/mapas
-// Nota: en Vite, public/ se sirve desde la raíz, así que se usa 'mapas/...'
-// IMPORTANTE: nombres exactos (minúsculas/mayúsculas) y sin 'public/' en la ruta
-// Intento principal con mapa1.json y fallback automático a mapa2.json si no existe
-this._map2Retry = false;
-this.load.tilemapTiledJSON('map2', 'mapas/mapa1.json');
-this.load.on('loaderror', (file) => {
-    try {
-        if (file && file.key === 'map2' && !this._map2Retry) {
-            console.warn('map2 failed to load mapas/mapa1.json, retrying mapas/mapa2.json');
-            this._map2Retry = true;
-            this.load.tilemapTiledJSON('map2', 'mapas/mapa2.json');
-            this.load.start();
-        }
-    } catch (e) { /* ignore */ }
-}, this);
+        // Cargar mapa2 Tiled JSON y su tileset (antes de cambiar el path)
+        this.load.tilemapTiledJSON('mapa2', 'mapas/mapa2.JSON');
+        this.load.image('tileset_mapa2', 'mapas/Tileset.png');
 
-// Tileset (único nombre exacto)
-this.load.image('mapTileset', 'mapas/Tileset.png');
-
-// Fondo: intenta fondo1.png y cae a fondo2.png si no existe
-this._fondoRetry = false;
-this.load.image('fondo1', 'mapas/fondo1.png');
-this.load.on('loaderror', (file) => {
-    try {
-        if (file && file.key === 'fondo1' && !this._fondoRetry) {
-            console.warn('fondo1 failed to load mapas/fondo1.png, retrying mapas/fondo2.png');
-            this._fondoRetry = true;
-            this.load.image('fondo1', 'mapas/fondo2.png');
-            this.load.start();
-        }
-    } catch (e) { /* ignore */ }
-}, this);
-
-// Otros assets
-    this.load.setPath('assets');
+        // Otros assets
+        this.load.setPath('assets');
         // background.png no existe en este proyecto, omitimos para evitar errores
         // this.load.image('background', 'background.png');
         this.load.image('floor', 'floor.png');
-    this.load.setPath('assets/player');
-    this.load.image('bullet', 'bullet.png');
-    this.load.image('tex_bullet', 'bullet.png');
-    // Charles normal shot projectile (spritesheet): frames 0-6 fly, 7-9 impact
-    // Asumimos frames de 64x64 como el resto de sprites; ajustaremos si es necesario
-    this.load.spritesheet('charles_bullet', 'pj1/bala-piedra.png', { frameWidth: 64, frameHeight: 64 });
-    // Charles habilidad especial: explosión (frames 0-10)
-    this.load.spritesheet('charles_explosion', 'pj1/explocion.png', { frameWidth: 64, frameHeight: 64 });
-    // Sofia special (R,R + Punch) projectile sprite (spritesheet 64x64)
-    this.load.spritesheet('sofia_piedra', 'pj2/piedra.png', { frameWidth: 64, frameHeight: 64 });
-    // Sofia normal shot projectile (spritesheet 64x64): frame 0 = move, 1-5 = impact
-    this.load.spritesheet('sofia_bullet', 'pj2/pj2-bala.png', { frameWidth: 64, frameHeight: 64 });
-    // Sofia walk overlay (spritesheet 64x64): frames 0-2 para caminar
-    this.load.spritesheet('sofia_walk', 'pj2/PJ2-golpe.png', { frameWidth: 64, frameHeight: 64 });
-    // Sofia punch overlay usa el mismo spritesheet (frames 1-5 para golpe)
-    this.load.spritesheet('sofia_punch', 'pj2/PJ2-golpe.png', { frameWidth: 64, frameHeight: 64 });
-    // Sofia block/charge overlay (spritesheet 64x64): frame 0 = block, frames 0-1 = charge animation
-    this.load.spritesheet('sofia_charge', 'pj2/carga2.png', { frameWidth: 64, frameHeight: 64 });
-    // Mario (pj4) punch overlay (spritesheet 64x64): frame 0 = idle, frames 1-5 = punch
-    this.load.spritesheet('mario_punch', 'pj4/pj4-golpe.png', { frameWidth: 64, frameHeight: 64 });
-    // Mario walk overlay (spritesheet 64x64): frames 0-2 para caminar
-    this.load.spritesheet('mario_walk', 'pj4/caminar4.png', { frameWidth: 64, frameHeight: 64 });
-    // Mario block overlay (spritesheet 64x64): un solo frame para bloquear
-    this.load.spritesheet('mario_block', 'pj4/pj4-bloquear.png', { frameWidth: 64, frameHeight: 64 });
-    // Mario charge overlay (spritesheet 64x64): frames 0-1 para carga de energía
-    this.load.spritesheet('mario_charge', 'pj4/carga.png', { frameWidth: 64, frameHeight: 64 });
-    // Mario habilidad especial (R,L,X): agua (frames 0-12)
-    this.load.spritesheet('mario_agua', 'pj4/agua.png', { frameWidth: 64, frameHeight: 64 });
-    // Mario habilidad especial (R,R,X): bola de agua (frames 0-13)
-    this.load.spritesheet('mario_bola_agua', 'pj4/bola-agua.png', { frameWidth: 64, frameHeight: 64 });
-    // Mario habilidad especial (L,R,X): láser de sangre (frames 0-14, 104x64)
-    this.load.spritesheet('mario_laser_sangre', 'pj4/laser-sangre.png', { frameWidth: 104, frameHeight: 64 });
-    
-    // Enemigos
-    this.load.setPath('assets/enemies');
-    // Enemigo volador (spritesheet 64x64): frame 0 = idle, frames 0-1 = shoot animation
-    this.load.spritesheet('flying_enemy', 'enemigo-ataque.png', { frameWidth: 64, frameHeight: 64 });
-    // Enemigo terrestre (spritesheet 64x64): frames 0-5 para moverse
-    this.load.spritesheet('ground_enemy_walk', 'moverce-enemigo2.png', { frameWidth: 64, frameHeight: 64 });
-    // Enemigo terrestre (spritesheet 64x64): frames 0-5 para atacar/desviar
-    this.load.spritesheet('ground_enemy_attack', 'ataque-enemigo2.png', { frameWidth: 64, frameHeight: 64 });
-    // Boss (spritesheets 64x64): caminar (idle=0, mover=1-2), ataque AoE (0-3), muerte (0-1)
-    this.load.spritesheet('boss_walk', 'jefe-caminar.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('boss_attack', 'ataque-jefe.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('boss_death', 'muerte-jefe.png', { frameWidth: 64, frameHeight: 64 });
-    
-    this.load.setPath('assets/player');
+        
+        this.load.setPath('assets/player');
+        
+        // Música de menú (desde carpeta public). Usar ruta absoluta para Vite/servidor
+        // Manejar errores de decodificación de audio (algunos navegadores no pueden decodificar MP3 via WebAudio)
+        this.load.once('filecomplete-audio-menu_music', () => {
+            // Audio cargado correctamente
+        });
+        this.load.once('filecomplete-audio-battle_music', () => {
+            // Audio cargado correctamente
+        });
+        // Suprimir errores de decodificación - el fallback a HTMLAudio lo manejará
+        const originalOnProcessError = this.load.onProcessError || function() {};
+        this.load.onProcessError = function(file) {
+            if (file && file.type === 'audio' && (file.key === 'menu_music' || file.key === 'battle_music')) {
+                // Silenciar error de audio - usaremos HTMLAudio como fallback
+                return;
+            }
+            originalOnProcessError.call(this, file);
+        };
+        
+        try {
+            this.load.audio('menu_music', '/assets/musica-menu.mp3');
+            this.load.audio('battle_music', '/assets/musica-pelea.mp3');
+        } catch (e) { /* ignore audio load errors */ }
+        
+        this.load.image('bullet', 'bullet.png');
+        this.load.image('tex_bullet', 'bullet.png');
+        // Charles normal shot projectile (spritesheet): frames 0-6 fly, 7-9 impact
+        // Asumimos frames de 64x64 como el resto de sprites; ajustaremos si es necesario
+        this.load.spritesheet('charles_bullet', 'pj1/bala-piedra.png', { frameWidth: 64, frameHeight: 64 });
+        // Charles habilidad especial: explosión (frames 0-10)
+        this.load.spritesheet('charles_explosion', 'pj1/explocion.png', { frameWidth: 64, frameHeight: 64 });
+        // Charles transform spritesheet (usado para visual en transformación y golpe transformado)
+        this.load.spritesheet('char0_trans', 'pj1/pj1-trans.png', { frameWidth: 64, frameHeight: 64 });
+        // Sofia special (R,R + Punch) projectile sprite (spritesheet 64x64)
+        this.load.spritesheet('sofia_piedra', 'pj2/piedra.png', { frameWidth: 64, frameHeight: 64 });
+        // Sofia normal shot projectile (spritesheet 64x64): frame 0 = move, 1-5 = impact
+        this.load.spritesheet('sofia_bullet', 'pj2/pj2-bala.png', { frameWidth: 64, frameHeight: 64 });
+        // Sofia walk overlay (spritesheet 64x64): frames 0-2 para caminar
+        this.load.spritesheet('sofia_walk', 'pj2/PJ2-golpe.png', { frameWidth: 64, frameHeight: 64 });
+        // Sofia punch overlay usa el mismo spritesheet (frames 1-5 para golpe)
+        this.load.spritesheet('sofia_punch', 'pj2/PJ2-golpe.png', { frameWidth: 64, frameHeight: 64 });
+        // Sofia block/charge overlay (spritesheet 64x64): frame 0 = block, frames 0-1 = charge animation
+        this.load.spritesheet('sofia_charge', 'pj2/carga2.png', { frameWidth: 64, frameHeight: 64 });
+        // Mario (pj4) punch overlay (spritesheet 64x64): frame 0 = idle, frames 1-5 = punch
+        this.load.spritesheet('mario_punch', 'pj4/pj4-golpe.png', { frameWidth: 64, frameHeight: 64 });
+        // Mario walk overlay (spritesheet 64x64): frames 0-2 para caminar
+        this.load.spritesheet('mario_walk', 'pj4/caminar4.png', { frameWidth: 64, frameHeight: 64 });
+        // Mario block overlay (spritesheet 64x64): un solo frame para bloquear
+        this.load.spritesheet('mario_block', 'pj4/pj4-bloquear.png', { frameWidth: 64, frameHeight: 64 });
+        // Mario charge overlay (spritesheet 64x64): frames 0-1 para carga de energía
+        this.load.spritesheet('mario_charge', 'pj4/carga.png', { frameWidth: 64, frameHeight: 64 });
+        // Mario habilidad especial (R,L,X): agua (frames 0-12)
+        this.load.spritesheet('mario_agua', 'pj4/agua.png', { frameWidth: 64, frameHeight: 64 });
+        // Mario habilidad especial (R,R,X): bola de agua (frames 0-13)
+        this.load.spritesheet('mario_bola_agua', 'pj4/bola-agua.png', { frameWidth: 64, frameHeight: 64 });
+        // Mario habilidad especial (L,R,X): láser de sangre (frames 0-14, 104x64)
+        this.load.spritesheet('mario_laser_sangre', 'pj4/laser-sangre.png', { frameWidth: 104, frameHeight: 64 });
+        // Franchesca (pj3) - anim especial de ataque aéreo en área
+        this.load.spritesheet('fran_air_aoe', 'pj3/pj3-golpe.png', { frameWidth: 64, frameHeight: 64 });
+        
+        // Enemigos
+        this.load.setPath('assets/enemies');
+        // Enemigo volador (spritesheet 64x64): frame 0 = idle, frames 0-1 = shoot animation
+        this.load.spritesheet('flying_enemy', 'enemigo-ataque.png', { frameWidth: 64, frameHeight: 64 });
+        // Enemigo terrestre (spritesheet 64x64): frames 0-5 para moverse
+        this.load.spritesheet('ground_enemy_walk', 'moverce-enemigo2.png', { frameWidth: 64, frameHeight: 64 });
+        // Enemigo terrestre (spritesheet 64x64): frames 0-5 para atacar/desviar
+        this.load.spritesheet('ground_enemy_attack', 'ataque-enemigo2.png', { frameWidth: 64, frameHeight: 64 });
+        // Boss (spritesheets 64x64): caminar (idle=0, mover=1-2), ataque AoE (0-3), muerte (0-1)
+        this.load.spritesheet('boss_walk', 'jefe-caminar.png', { frameWidth: 64, frameHeight: 64 });
+        this.load.spritesheet('boss_attack', 'ataque-jefe.png', { frameWidth: 64, frameHeight: 64 });
+        this.load.spritesheet('boss_death', 'muerte-jefe.png', { frameWidth: 64, frameHeight: 64 });
+        
+        this.load.setPath('assets/player');
     }
 
     
@@ -378,6 +528,112 @@ this.load.on('loaderror', (file) => {
                     this.anims.create({ key: 'sofia_charge_anim', frames: framesCharge, frameRate: 8, repeat: -1 });
                 }
             } catch (e) { /* ignore sofia override errors */ }
+            
+            // Overrides específicos para Franchesca (char2 / pj3)
+            try {
+                // Caminar: frames 0-3
+                if (this.textures.exists('char2_walk')) {
+                    if (this.anims.exists('char2_walk')) this.anims.remove('char2_walk');
+                    const texFranWalk = this.textures.get('char2_walk');
+                    let totalFranWalk = 1;
+                    try {
+                        if (texFranWalk && typeof texFranWalk.frameTotal === 'number') totalFranWalk = Math.max(1, texFranWalk.frameTotal);
+                        else if (texFranWalk && texFranWalk.frames) totalFranWalk = Math.max(1, Object.keys(texFranWalk.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalFranWalk = 1; }
+                    const endFranWalk = Math.min(3, Math.max(0, totalFranWalk - 1));
+                    const framesFranWalk = this.anims.generateFrameNumbers('char2_walk', { start: 0, end: endFranWalk });
+                    this.anims.create({ key: 'char2_walk', frames: framesFranWalk, frameRate: 6, repeat: -1 });
+                }
+
+                // Golpe: frames 0-3
+                if (this.textures.exists('char2_punch')) {
+                    if (this.anims.exists('char2_punch')) this.anims.remove('char2_punch');
+                    const texFranPunch = this.textures.get('char2_punch');
+                    let totalFranPunch = 1;
+                    try {
+                        if (texFranPunch && typeof texFranPunch.frameTotal === 'number') totalFranPunch = Math.max(1, texFranPunch.frameTotal);
+                        else if (texFranPunch && texFranPunch.frames) totalFranPunch = Math.max(1, Object.keys(texFranPunch.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalFranPunch = 1; }
+                    const endFranPunch = Math.min(3, Math.max(0, totalFranPunch - 1));
+                    const framesFranPunch = this.anims.generateFrameNumbers('char2_punch', { start: 0, end: endFranPunch });
+                    this.anims.create({ key: 'char2_punch', frames: framesFranPunch, frameRate: 14, repeat: 0 });
+                }
+
+                // Animación de ataque aéreo (frames 0-3) - fran_air_aoe
+                if (this.textures.exists('fran_air_aoe') && !this.anims.exists('fran_air_aoe')) {
+                    const texFranAoe = this.textures.get('fran_air_aoe');
+                    let totalFranAoe = 1;
+                    try {
+                        if (texFranAoe && typeof texFranAoe.frameTotal === 'number') totalFranAoe = Math.max(1, texFranAoe.frameTotal);
+                        else if (texFranAoe && texFranAoe.frames) totalFranAoe = Math.max(1, Object.keys(texFranAoe.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalFranAoe = 1; }
+                    const endFranAoe = Math.min(3, Math.max(0, totalFranAoe - 1));
+                    const framesAoe = this.anims.generateFrameNumbers('fran_air_aoe', { start: 0, end: endFranAoe });
+                    this.anims.create({ key: 'fran_air_aoe', frames: framesAoe, frameRate: 12, repeat: 0 });
+                }
+            } catch (e) { /* ignore franchesca override errors */ }
+
+            // Overrides específicos para Charles (char0 / pj1)
+            try {
+                // Idle ya usa frame 0 del spritesheet 'char0_idle' (pj1-skill1) por lógica en update (no anim loop)
+                // Caminar: usar frames 0-3 de 'pj1-caminar'
+                if (this.textures.exists('char0_walk')) {
+                    if (this.anims.exists('char0_walk')) this.anims.remove('char0_walk');
+                    const texWalk0 = this.textures.get('char0_walk');
+                    let totalWalk0 = 1;
+                    try {
+                        if (texWalk0 && typeof texWalk0.frameTotal === 'number') totalWalk0 = Math.max(1, texWalk0.frameTotal);
+                        else if (texWalk0 && texWalk0.frames) totalWalk0 = Math.max(1, Object.keys(texWalk0.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalWalk0 = 1; }
+                    const endWalk0 = Math.min(3, Math.max(0, totalWalk0 - 1));
+                    const framesWalk0 = this.anims.generateFrameNumbers('char0_walk', { start: 0, end: endWalk0 });
+                    this.anims.create({ key: 'char0_walk', frames: framesWalk0, frameRate: 6, repeat: -1 });
+                }
+
+                // Golpe normal: frames 0-3 de pj1-golpe
+                if (this.textures.exists('char0_punch')) {
+                    if (this.anims.exists('char0_punch')) this.anims.remove('char0_punch');
+                    const texPunch0 = this.textures.get('char0_punch');
+                    let totalPunch0 = 1;
+                    try {
+                        if (texPunch0 && typeof texPunch0.frameTotal === 'number') totalPunch0 = Math.max(1, texPunch0.frameTotal);
+                        else if (texPunch0 && texPunch0.frames) totalPunch0 = Math.max(1, Object.keys(texPunch0.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalPunch0 = 1; }
+                    const endPunch0 = Math.min(3, Math.max(0, totalPunch0 - 1));
+                    const framesPunch0 = this.anims.generateFrameNumbers('char0_punch', { start: 0, end: endPunch0 });
+                    this.anims.create({ key: 'char0_punch', frames: framesPunch0, frameRate: 14, repeat: 0 });
+                }
+
+                // Golpe que quema (combo): usar pj1-skill1 frames 0-6
+                if (this.textures.exists('char0_punch_fire')) {
+                    if (this.anims.exists('char0_punch_fire')) this.anims.remove('char0_punch_fire');
+                    const texPF0 = this.textures.get('char0_punch_fire');
+                    let totalPF0 = 1;
+                    try {
+                        if (texPF0 && typeof texPF0.frameTotal === 'number') totalPF0 = Math.max(1, texPF0.frameTotal);
+                        else if (texPF0 && texPF0.frames) totalPF0 = Math.max(1, Object.keys(texPF0.frames).filter(k => !isNaN(+k)).length);
+                    } catch (e) { totalPF0 = 1; }
+                    const endPF0 = Math.min(6, Math.max(0, totalPF0 - 1));
+                    const framesPF0 = this.anims.generateFrameNumbers('char0_punch_fire', { start: 0, end: endPF0 });
+                    // Mucho más lenta (de 16 -> 3 fps)
+                    this.anims.create({ key: 'char0_punch_fire', frames: framesPF0, frameRate: 3, repeat: 0 });
+                }
+
+                // Golpe transformado: usar pj1-trans frames 0-3
+                if (this.textures.exists('char0_trans')) {
+                    if (!this.anims.exists('char0_trans_punch')) {
+                        const texT0 = this.textures.get('char0_trans');
+                        let totalT0 = 1;
+                        try {
+                            if (texT0 && typeof texT0.frameTotal === 'number') totalT0 = Math.max(1, texT0.frameTotal);
+                            else if (texT0 && texT0.frames) totalT0 = Math.max(1, Object.keys(texT0.frames).filter(k => !isNaN(+k)).length);
+                        } catch (e) { totalT0 = 1; }
+                        const endT0 = Math.min(3, Math.max(0, totalT0 - 1));
+                        const framesT0 = this.anims.generateFrameNumbers('char0_trans', { start: 0, end: endT0 });
+                        this.anims.create({ key: 'char0_trans_punch', frames: framesT0, frameRate: 14, repeat: 0 });
+                    }
+                }
+            } catch (e) { /* ignore charles override errors */ }
             
             // Animaciones para Mario (char3 / pj4)
             try {
@@ -589,6 +845,8 @@ class Menu extends Phaser.Scene {
     constructor() { super("Menu"); }
     create() {
         const { width } = this.scale;
+        // Música de menú
+        ensureMenuMusic(this);
         this.selectedIndex = 0;
         this.buttons = [];
 
@@ -713,6 +971,8 @@ class ControlsScene extends Phaser.Scene {
     constructor() { super("ControlsScene"); }
     create() {
         const { width, height } = this.scale;
+        // Música de menú
+        ensureMenuMusic(this);
     // Reset runtime flags so GameOver can be triggered repeatedly across matches
     this._gameOverCooldownUntil = 0;
         // Ensure background offset resets to default for a fresh layout
@@ -791,6 +1051,8 @@ class ControlsScene extends Phaser.Scene {
 class ModeSelector extends Phaser.Scene {
     constructor() { super("ModeSelector"); }
     create() {
+        // Música de menú
+        ensureMenuMusic(this);
         const { width, height } = this.scale;
         this.selectedIndex = 0;
         this.buttons = [];
@@ -915,6 +1177,8 @@ class CharacterSelector extends Phaser.Scene {
     init(data) { this.selectedMode = data.mode || "versus"; }
 
     create() {
+        // Música de menú
+        ensureMenuMusic(this);
         const { width, height } = this.scale;
         // Ensure we are not in fullscreen mode when showing the GameOver UI.
         // Some browsers/platforms keep the canvas scaled and that causes the map to be mispositioned when
@@ -1208,7 +1472,8 @@ class GameScene extends Phaser.Scene {
             if (needRecreate) {
                 const key = `char${this.player1Index}_idle`;
                 const x = (s && s.x) ? s.x : (this._lastPlayerX || 200);
-                const y = (s && s.y) ? s.y : (this._lastPlayerY || height - 150);
+                const yDefault = (this.selectedMap === 'Mapa 1') ? (height - 20) : (height - 40);
+                const y = (s && s.y) ? s.y : (this._lastPlayerY || yDefault);
                 try { if (s && s.destroy) s.destroy(); } catch (e) {}
                 s = this.physics.add.sprite(x, y, key).setCollideWorldBounds(true);
                 try { s.setDisplaySize(64, 64); } catch (e) {}
@@ -1286,35 +1551,79 @@ class GameScene extends Phaser.Scene {
 
     // Create invisible platforms/ground for a given map name
     createMapPlatforms(mapName, width, height) {
+        // Si es Mapa 2 y tenemos tilemap, no crear plataformas invisibles
+        if (mapName === 'Mapa 2' && this._tilemapSueloLayer) {
+            console.log('Mapa 2 usa tilemap con texturas, no se crean plataformas invisibles');
+            return;
+        }
+        
         // Instead of creating bodies directly here, store platform data and build from it.
         if (!this._platformData) this._platformData = [];
         this._platformData.length = 0; // clear
 
-        if (mapName === 'Mapa 2') {
-            // El mapa 2 usa tilemap con colisiones; no crear plataformas invisibles aquí.
-            this.buildPlatformsFromData();
-            return;
-        } else if (mapName === 'Mapa 1') {
+        if (mapName === 'Mapa 1') {
             // Create a slight slope by splitting the ground into two segments with different Y
 
-            // Left ground (a bit higher) - nudged slightly down for better fit
-            this._platformData.push({ x: Math.round(width * 0.20), y: Math.round(height * 0.890), w: Math.round(width * 0.56), h: 40 });
-            // Right ground (a bit lower) to create inclination (keep as-is)
-            this._platformData.push({ x: Math.round(width * 0.72), y: Math.round(height * 0.92), w: Math.round(width * 0.56), h: 40 });
+            // Left ground - bajado más
+            this._platformData.push({ x: Math.round(width * 0.20), y: Math.round(height * 1.1), w: Math.round(width * 0.56), h: 40 });
+            // Right ground - bajado más
+            this._platformData.push({ x: Math.round(width * 0.72), y: Math.round(height * 1.1), w: Math.round(width * 0.56), h: 40 });
 
-            // Platforms near the left player: slight adjustments
-            // left-most near player (a bit lower than before)
-            this._platformData.push({ x: Math.round(width * 0.15), y: Math.round(height * 0.65), w: 160, h: 24 });
-            // platform above player: it was too high, move it down a bit (closer to ground)
-            this._platformData.push({ x: Math.round(width * 0.32), y: Math.round(height * 0.48), w: 160, h: 24 });
+            // Platforms near the left player - bajadas considerablemente
+            // left-most near player - bajada más
+            this._platformData.push({ x: Math.round(width * 0.12), y: Math.round(height * 0.88), w: 160, h: 24 });
+            // platform above player - bajada más
+            this._platformData.push({ x: Math.round(width * 0.32), y: Math.round(height * 0.68), w: 160, h: 24 });
 
-            // Middle platform: move a bit to the left and keep it short
-            this._platformData.push({ x: Math.round(width * 0.58), y: Math.round(height * 0.850), w: 580, h: 90 });
+            // Middle platform - bajada más
+            this._platformData.push({ x: Math.round(width * 0.58), y: Math.round(height * 1.07), w: 580, h: 90 });
 
-            // New small platform between the two players: higher than the red one but below the top flying platforms
-            this._platformData.push({ x: Math.round(width * 0.56), y: Math.round(height * 0.50), w: 120, h: 24 });
-
-            // Note: removed the far-right platform and the boat internal platform as requested
+            // Small platform between players - bajada más
+            this._platformData.push({ x: Math.round(width * 0.56), y: Math.round(height * 0.71), w: 120, h: 24 });
+        } else if (mapName === 'Mapa 2') {
+            // Plataformas generadas desde mapa2.JSON capa "suelo"
+            // Mapa base: 30x20 tiles, cada tile = 32x32px
+            
+            // Plataformas superiores flotantes (filas 3-5)
+            this._platformData.push({ x: 688, y: 112, w: 32, h: 32 }); // Individual superior
+            this._platformData.push({ x: 672, y: 144, w: 64, h: 32 }); // Pequeña flotante
+            this._platformData.push({ x: 240, y: 176, w: 32, h: 32 }); // Flotante izq
+            this._platformData.push({ x: 336, y: 176, w: 32, h: 32 }); // Flotante centro-izq
+            this._platformData.push({ x: 496, y: 176, w: 32, h: 32 }); // Flotante centro
+            this._platformData.push({ x: 624, y: 176, w: 96, h: 32 }); // Flotante derecha
+            
+            // Plataformas medias (filas 6-8)
+            this._platformData.push({ x: 288, y: 208, w: 128, h: 32 }); // Media-alta izq
+            this._platformData.push({ x: 416, y: 208, w: 128, h: 32 }); // Media-alta centro
+            this._platformData.push({ x: 528, y: 208, w: 96, h: 32 }); // Media-alta der
+            this._platformData.push({ x: 784, y: 240, w: 224, h: 32 }); // Larga derecha
+            this._platformData.push({ x: 672, y: 272, w: 128, h: 32 }); // Media derecha
+            
+            // Plataformas media-baja (filas 9-12)
+            this._platformData.push({ x: 64, y: 304, w: 128, h: 32 }); // Pared izq fila 9
+            this._platformData.push({ x: 400, y: 304, w: 160, h: 32 }); // Centro fila 9
+            this._platformData.push({ x: 672, y: 304, w: 64, h: 32 }); // Der fila 9
+            this._platformData.push({ x: 64, y: 336, w: 128, h: 32 }); // Pared izq fila 10
+            this._platformData.push({ x: 224, y: 336, w: 128, h: 32 }); // Centro-izq fila 10
+            this._platformData.push({ x: 608, y: 336, w: 128, h: 32 }); // Der fila 10
+            this._platformData.push({ x: 64, y: 368, w: 128, h: 32 }); // Pared izq fila 11
+            this._platformData.push({ x: 288, y: 368, w: 64, h: 32 }); // Centro fila 11
+            this._platformData.push({ x: 576, y: 368, w: 64, h: 32 }); // Der fila 11
+            this._platformData.push({ x: 400, y: 400, w: 352, h: 32 }); // Plataforma central larga fila 12
+            
+            // Suelo y estructuras base (filas 13-19)
+            this._platformData.push({ x: 64, y: 432, w: 128, h: 32 }); // Pared izq fila 13
+            this._platformData.push({ x: 64, y: 464, w: 128, h: 32 }); // Pared izq fila 14
+            this._platformData.push({ x: 64, y: 496, w: 128, h: 32 }); // Pared izq fila 15
+            this._platformData.push({ x: 64, y: 528, w: 128, h: 32 }); // Pared izq fila 16
+            this._platformData.push({ x: 64, y: 560, w: 128, h: 32 }); // Pared izq fila 17
+            this._platformData.push({ x: 64, y: 592, w: 128, h: 32 }); // Pared izq fila 18
+            this._platformData.push({ x: 64, y: 624, w: 128, h: 32 }); // Pared izq fila 19 (suelo)
+            
+            // Columnas y plataforma derecha
+            this._platformData.push({ x: 480, y: 464, w: 64, h: 32 }); // Columna fila 14
+            this._platformData.push({ x: 480, y: 496, w: 64, h: 32 }); // Columna fila 15
+            this._platformData.push({ x: 544, y: 528, w: 192, h: 32 }); // Plataforma derecha fila 16
         } else {
             this._platformData.push({ x: Math.round(width / 2), y: Math.round(height - 30), w: Math.round(width), h: 40 });
         }
@@ -1337,7 +1646,11 @@ class GameScene extends Phaser.Scene {
         if (!this._platformData) this._platformData = [];
 
         this._platformData.forEach((pd, idx) => {
-            const rect = this.add.rectangle(pd.x, pd.y, pd.w, pd.h, 0x000000, 0).setOrigin(0.5);
+            const rect = this.add.rectangle(pd.x, pd.y, pd.w, pd.h, 0x00ff00, this._platformsVisible ? 0.35 : 0).setOrigin(0.5);
+            // add a subtle outline to make edges visible
+            try { rect.setStrokeStyle(2, 0x00ff00, this._platformsVisible ? 0.8 : 0); } catch (e) {}
+            // render below players but above background
+            try { rect.setDepth(6); } catch (e) {}
             this.physics.add.existing(rect, true);
             this.groundGroup.add(rect);
             this._platformObjects.push({ gobj: rect, data: pd });
@@ -1356,8 +1669,35 @@ class GameScene extends Phaser.Scene {
     // If debug overlay is active, redraw (debug disabled in gameplay)
     }
 
+    // Toggle visibility of invisible platform rectangles
+    togglePlatformsVisibility() {
+        this._platformsVisible = !this._platformsVisible;
+        if (this._platformObjects && this._platformObjects.length) {
+            const fillAlpha = this._platformsVisible ? 0.35 : 0;
+            const strokeAlpha = this._platformsVisible ? 0.8 : 0;
+            this._platformObjects.forEach(obj => {
+                const r = obj.gobj;
+                try {
+                    // update fill and stroke visibility
+                    r.setFillStyle(0x00ff00, fillAlpha);
+                    r.setStrokeStyle(2, 0x00ff00, strokeAlpha);
+                } catch (e) {}
+            });
+        }
+    }
+
     create() {
+        // Detener música de menú e iniciar música de batalla
+        stopMenuMusic(this);
+        ensureBattleMusic(this);
+        
         const { width, height } = this.scale;
+        
+        // Configurar límites del mundo: quitar el límite inferior para que puedan caer
+        this.physics.world.setBounds(0, 0, width, height * 2);
+        // Activar solo colisiones en los lados y arriba, no abajo
+        this.physics.world.setBoundsCollision(true, true, true, false);
+        
         // Try fullscreen on start (may be rejected if not user-gesture). Swallow promise rejection.
         try {
             const fs = this.scale && this.scale.startFullscreen ? this.scale.startFullscreen() : null;
@@ -1367,45 +1707,40 @@ class GameScene extends Phaser.Scene {
         } catch (e) { /* ignore fullscreen errors */ }
 
         // Background map image (if selected) - always try to show it: if not loaded, load it at runtime
+        // Función para agregar el fondo (usada por ambos mapas)
+        const addBgIfReady = (key) => {
+            if (!this.textures.exists(key)) return false;
+            const bg = this.add.image(0, 0, key);
+            // store reference so we can nudge it live
+            this._bgImage = bg;
+            if (this._bgYOffset === undefined) this._bgYOffset = 0; // sin offset por defecto
+            
+            // Estirar el fondo para cubrir toda la pantalla (sin mantener proporción)
+            try {
+                // Usar las dimensiones de la cámara para cubrir todo el viewport
+                const camWidth = this.cameras.main.width;
+                const camHeight = this.cameras.main.height;
+                
+                bg.setDisplaySize(camWidth, camHeight);
+                bg.setOrigin(0.5, 0.5);
+                bg.setPosition(camWidth / 2, camHeight / 2 + (this._bgYOffset || 0));
+                bg.setScrollFactor(0);
+                bg.setDepth(-10);
+            } catch (e) {
+                // fallback con width/height del create
+                try { 
+                    bg.setDisplaySize(width, height); 
+                    bg.setOrigin(0.5, 0.5); 
+                    bg.x = width / 2; 
+                    bg.y = height / 2;
+                    bg.setScrollFactor(0);
+                    bg.setDepth(-10);
+                } catch (ee) { /* ignore */ }
+            }
+            return true;
+        };
+
         if (this.selectedMap === 'Mapa 1') {
-            const addBgIfReady = (key = 'map1') => {
-                if (!this.textures.exists(key)) return false;
-                const bg = this.add.image(0, 0, key);
-                // store reference so we can nudge it live
-                this._bgImage = bg;
-                if (this._bgYOffset === undefined) this._bgYOffset = 48; // default nudge down so art sits correctly
-                // Prefer a cover-style scale (no distortion) so the image fills the screen.
-                // Then bottom-align the image so ground/art lines up with the bottom of the viewport.
-                try {
-                    const imgW = bg.width || bg.texture ? bg.texture.source[0].width : null;
-                    const imgH = bg.height || bg.texture ? bg.texture.source[0].height : null;
-                    // Phaser stores textures differently depending on load path; fallback if unavailable
-                    const texture = this.textures.get(key);
-                    const source = texture && texture.source && texture.source[0] ? texture.source[0] : null;
-                    const realW = (imgW && imgW > 0) ? imgW : (source ? source.width : null);
-                    const realH = (imgH && imgH > 0) ? imgH : (source ? source.height : null);
-
-                    if (realW && realH) {
-                        const scale = Math.max(width / realW, height / realH); // cover
-                        bg.setScale(scale);
-                        // bottom-center origin so the bottom of the image matches the bottom of the viewport
-                        bg.setOrigin(0.5, 1);
-                        bg.x = width / 2;
-                        bg.y = height + (this._bgYOffset || 0); // bottom aligned with offset
-                    } else {
-                        // fallback: fill the viewport (may stretch)
-                        bg.setDisplaySize(width, height);
-                        bg.setOrigin(0.5, 0.5);
-                        bg.x = width / 2; bg.y = height / 2 + (this._bgYOffset || 0);
-                    }
-                } catch (e) {
-                    // final fallback: stretch to fit
-                    try { bg.setDisplaySize(width, height); bg.setOrigin(0.5, 0.5); bg.x = width / 2; bg.y = height / 2; } catch (ee) { /* ignore */ }
-                }
-                bg.setScrollFactor(0).setDepth(-10);
-                return true;
-            };
-
             // If texture already exists (preloaded), add immediately
             if (!addBgIfReady('map1')) {
                 // Try to load map1 at runtime. We'll attempt relative path first, then absolute on one retry.
@@ -1429,104 +1764,91 @@ class GameScene extends Phaser.Scene {
                 this.load.start();
             }
         }
-        
-        // Mapa 2: fondo + tilemap (embebiendo tilesets externos en runtime)
+
+        // Mapa 2: fondo2.png
         if (this.selectedMap === 'Mapa 2') {
-            // Fondo a pantalla completa (cover)
-            if (this.textures.exists('fondo1')) {
-                const bg = this.add.image(0, 0, 'fondo1').setDepth(-10);
-                try {
-                    const tex = this.textures.get('fondo1');
-                    const src = tex && tex.getSourceImage ? tex.getSourceImage() : (tex.source && tex.source[0] && tex.source[0].image);
-                    const iw = (src && src.width) || bg.width;
-                    const ih = (src && src.height) || bg.height;
-                    const scale = Math.max(width / iw, height / ih);
-                    bg.setScale(scale).setOrigin(0.5, 0.5).setPosition(width / 2, height / 2);
-                } catch (e) {
-                    bg.setDisplaySize(width, height).setOrigin(0.5);
-                    bg.x = width / 2; bg.y = height / 2;
-                }
-            }
-
-            // Construir tilemap embebiendo tilesets externos (TSX) usando la misma imagen Tileset.png
-            const raw = this.cache.json.get('map2');
-            if (raw && this.textures.exists('mapTileset')) {
-                const tex = this.textures.get('mapTileset');
-                const src = tex && tex.getSourceImage ? tex.getSourceImage() : (tex.source && tex.source[0] && tex.source[0].image);
-                const iw = src && src.width ? src.width : 0;
-                const ih = src && src.height ? src.height : 0;
-                const tw = raw.tilewidth || 32;
-                const th = raw.tileheight || 32;
-                const cols = iw && tw ? Math.floor(iw / tw) : 0;
-                const rows = ih && th ? Math.floor(ih / th) : 0;
-                const tilecount = cols * rows;
-
-                const mapData = JSON.parse(JSON.stringify(raw));
-
-                // Si el mapa declara múltiples tilesets via TSX, duplícalos con distintos firstgid
-                const declaredTilesets = Array.isArray(raw.tilesets) ? raw.tilesets : [];
-                if (declaredTilesets.length > 0) {
-                    mapData.tilesets = declaredTilesets.map((ts, i) => ({
-                        firstgid: ts.firstgid || (i === 0 ? 1 : (1 + i * tilecount)),
-                        name: ts.name || (i === 0 ? 'TilesetA' : `Tileset${String.fromCharCode(65 + i)}`),
-                        image: 'Tileset.png',
-                        imagewidth: iw,
-                        imageheight: ih,
-                        margin: 0,
-                        spacing: 0,
-                        tilewidth: tw,
-                        tileheight: th,
-                        tilecount,
-                        columns: cols
-                    }));
-                } else {
-                    mapData.tilesets = [{
-                        firstgid: 1,
-                        name: 'TilesetA',
-                        image: 'Tileset.png',
-                        imagewidth: iw,
-                        imageheight: ih,
-                        margin: 0,
-                        spacing: 0,
-                        tilewidth: tw,
-                        tileheight: th,
-                        tilecount,
-                        columns: cols
-                    }];
-                }
-
-                // Crear tilemap desde objeto Tiled ya modificado
-                const map = this.make.tilemap({
-                    data: mapData,
-                    tileWidth: tw,
-                    tileHeight: th,
-                    width: raw.width,
-                    height: raw.height
-                });
-
-                // Registrar cada tileset embebido contra la MISMA textura 'mapTileset'
-                const tilesetObjects = mapData.tilesets.map(ts => map.addTilesetImage(ts.name, 'mapTileset'));
-
-                // Crear todas las capas; pasar todos los tilesets para resolver GIDs múltiples
-                const createdLayers = {};
-                (mapData.layers || []).forEach((layerData, idx) => {
-                    const layer = map.createLayer(layerData.name, tilesetObjects, 0, 0);
-                    if (layer) {
-                        layer.setDepth(idx);
-                        createdLayers[layerData.name] = layer;
-                        if ((layerData.name || '').toLowerCase() === 'suelo') {
-                            layer.setCollisionByExclusion([-1]);
-                            try { this.physics.add.collider(this.players[0].sprite, layer); } catch (e) {}
-                            if (this.mode !== 'cooperativo') {
-                                try { this.physics.add.collider(this.players[1].sprite, layer); } catch (e) {}
-                            }
+            // If texture already exists (preloaded), add immediately
+            if (!addBgIfReady('map2')) {
+                // Try to load map2 at runtime
+                this._map2InGameRetry = false;
+                // once the file finishes loading, add the background
+                this.load.once('filecomplete-image-map2', () => { addBgIfReady('map2'); }, this);
+                // handle load errors: retry once with absolute path
+                this.load.once('loaderror', (file) => {
+                    try {
+                        if (file && file.key === 'map2' && !this._map2InGameRetry) {
+                            this._map2InGameRetry = true;
+                            this.load.image('map2', '/mapas/fondo2.png');
+                            // ensure we add when this second attempt completes
+                            this.load.once('filecomplete-image-map2', () => { addBgIfReady('map2'); }, this);
+                            this.load.start();
                         }
+                    } catch (e) { /* ignore */ }
+                }, this);
+                // start the loader for the first attempt
+                this.load.image('map2', 'mapas/fondo2.png');
+                this.load.start();
+            }
+            
+            // Crear tilemap con texturas del Tileset.png
+            if (this.cache.tilemap.has('mapa2') && this.textures.exists('tileset_mapa2')) {
+                try {
+                    // Crear el tilemap desde el JSON (ahora con tileset embebido)
+                    const map = this.make.tilemap({ key: 'mapa2' });
+                    
+                    // Ahora el tileset está embebido en el JSON con el nombre "Tileset"
+                    const tileset = map.addTilesetImage('Tileset', 'tileset_mapa2');
+                    
+                    // Intentar agregar el tileset con diferentes nombres posibles
+                    const possibleNames = ['Tileset', 'tileset', '1', 'tiled'];
+                    
+                    if (tileset) {
+                        console.log('Tileset cargado correctamente');
+                        // Crear las capas del mapa
+                        // Capa de fondo (decoración sin colisión)
+                        try {
+                            const fondoLayer = map.createLayer('fondo', tileset, 0, 0);
+                            if (fondoLayer) fondoLayer.setDepth(-5);
+                        } catch (e) {
+                            console.warn('No se pudo crear capa fondo:', e);
+                        }
+                        
+                        // Capa de decoración
+                        try {
+                            const decoracionLayer = map.createLayer('decoracion', tileset, 0, 0);
+                            if (decoracionLayer) decoracionLayer.setDepth(0);
+                        } catch (e) {
+                            console.warn('No se pudo crear capa decoracion:', e);
+                        }
+                        
+                        // Capa de suelo (con colisión)
+                        try {
+                            const sueloLayer = map.createLayer('suelo', tileset, 0, 0);
+                            if (sueloLayer) {
+                                sueloLayer.setDepth(1);
+                                // Configurar colisión: todos los tiles que NO sean 0 (vacío) tienen colisión
+                                sueloLayer.setCollisionByExclusion([-1]);
+                                
+                                // Guardar referencia para agregar colisiones después de crear jugadores
+                                this._tilemapSueloLayer = sueloLayer;
+                                console.log('Capa de suelo creada con colisiones');
+                            }
+                        } catch (e) {
+                            console.error('Error al crear capa suelo:', e);
+                        }
+                        
+                        // Guardar referencia al mapa
+                        this._tilemap = map;
+                        
+                        console.log('Mapa 2 con texturas cargado correctamente');
+                    } else {
+                        console.error('No se pudo agregar el tileset al mapa');
                     }
-                });
-
-                this._tilemapLayers = createdLayers;
+                } catch (error) {
+                    console.error('Error al crear tilemap del Mapa 2:', error);
+                }
             } else {
-                console.warn('Map2 JSON or mapTileset texture missing');
+                console.warn('No se encontró mapa2 o tileset_mapa2');
             }
         }
 
@@ -1548,6 +1870,16 @@ class GameScene extends Phaser.Scene {
 
         this._bgOffsetText = this.add.text(10, 10, `bg offset: ${this._bgYOffset || 0}`, { font: '16px Arial', color: '#ffffff' }).setDepth(1000).setScrollFactor(0);
 
+        // Listener para redimensionar el fondo cuando cambie el tamaño de la ventana/pantalla completa
+        this.scale.on('resize', (gameSize) => {
+            if (this._bgImage) {
+                const newWidth = gameSize.width;
+                const newHeight = gameSize.height;
+                this._bgImage.setDisplaySize(newWidth, newHeight);
+                this._bgImage.setPosition(newWidth / 2, newHeight / 2 + (this._bgYOffset || 0));
+            }
+        });
+
         // Platform debug tools removed for gameplay stability
         this._debugMode = false;
         this._selectedPlatformIndex = 0;
@@ -1555,7 +1887,14 @@ class GameScene extends Phaser.Scene {
 
         // Create invisible ground and platforms depending on selected map
         this.groundGroup = this.physics.add.staticGroup();
+        // visibility flag for debug/invisible platforms (default false)
+        if (typeof this._platformsVisible !== 'boolean') this._platformsVisible = false;
         this.createMapPlatforms(this.selectedMap, width, height);
+
+        // Toggle platforms visibility on 'U'
+        try {
+            this.input.keyboard.on('keydown-U', () => this.togglePlatformsVisibility());
+        } catch (e) { /* ignore */ }
 
         // Platform debug showing removed to prevent accidental runtime edits during gameplay
 
@@ -1565,8 +1904,24 @@ class GameScene extends Phaser.Scene {
     // Create character sprites based on selected indices (player1Index, player2Index)
     const p1KeyBase = `char${this.player1Index}_idle`;
     const p2KeyBase = `char${this.player2Index}_idle`;
-    const p1Sprite = this.physics.add.sprite(200, height - 150, p1KeyBase).setCollideWorldBounds(true);
-    const p2Sprite = this.physics.add.sprite(width - 200, height - 150, p2KeyBase).setCollideWorldBounds(true);
+    
+    // Verificar que las texturas existen antes de crear los sprites
+    if (!this.textures.exists(p1KeyBase)) {
+        console.error(`Texture ${p1KeyBase} does not exist. Returning to character selector.`);
+        this.scene.stop();
+        this.scene.start('CharacterSelector', { mode: this.mode });
+        return;
+    }
+    if (!this.textures.exists(p2KeyBase)) {
+        console.error(`Texture ${p2KeyBase} does not exist. Returning to character selector.`);
+        this.scene.stop();
+        this.scene.start('CharacterSelector', { mode: this.mode });
+        return;
+    }
+    
+    const spawnY = (this.selectedMap === 'Mapa 1') ? (height - 20) : (height - 40);
+    const p1Sprite = this.physics.add.sprite(200, spawnY, p1KeyBase).setCollideWorldBounds(true);
+    const p2Sprite = this.physics.add.sprite(width - 200, spawnY, p2KeyBase).setCollideWorldBounds(true);
     // Ensure players render above enemies/boss/spikes (boss depth=5, spikes=4)
     try { p1Sprite.setDepth(8); p2Sprite.setDepth(8); } catch (e) {}
 
@@ -1660,6 +2015,13 @@ class GameScene extends Phaser.Scene {
         // Colliders
     // Colliders: players with groundGroup (invisible platforms)
     this.physics.add.collider(this.players[0].sprite, this.groundGroup);
+    
+    // Si usamos tilemap en Mapa 2, agregar colisiones con la capa de suelo
+    if (this._tilemapSueloLayer) {
+        this.physics.add.collider(this.players[0].sprite, this._tilemapSueloLayer);
+        console.log('Colisión agregada entre jugador 1 y tilemap');
+    }
+    
     // If coop mode, share the same sprite between players and create reticle
     if (this.mode === 'cooperativo') {
         // Hide and disable the original p2Sprite since we'll use p1's sprite
@@ -1680,6 +2042,12 @@ class GameScene extends Phaser.Scene {
         } catch (e) { /* ignore */ }
     } else {
         this.physics.add.collider(this.players[1].sprite, this.groundGroup);
+        
+        // Si usamos tilemap en Mapa 2, agregar colisiones con jugador 2
+        if (this._tilemapSueloLayer) {
+            this.physics.add.collider(this.players[1].sprite, this._tilemapSueloLayer);
+            console.log('Colisión agregada entre jugador 2 y tilemap');
+        }
     }
 
     // Projectiles group (sin gravedad por defecto)
@@ -2512,9 +2880,16 @@ class GameScene extends Phaser.Scene {
             if (sprite.clearTint) sprite.clearTint();
             const idleKey = `char${charIndex}_idle`;
             if (this.textures.exists(idleKey)) {
-                try { sprite.setTexture(idleKey); sprite.setFrame(0); } catch (e) { /* ignore */ }
+                try {
+                    sprite.setTexture(idleKey);
+                    if (charIndex === 2) sprite.setFrame(3); // Franchesca idle usa frame 3 de caminar
+                    else sprite.setFrame(0);
+                } catch (e) { /* ignore */ }
             } else {
-                try { sprite.setFrame(0); } catch (e) { /* ignore */ }
+                try {
+                    if (charIndex === 2) sprite.setFrame(3);
+                    else sprite.setFrame(0);
+                } catch (e) { /* ignore */ }
             }
         }
 
@@ -2524,23 +2899,30 @@ class GameScene extends Phaser.Scene {
         else if (right) { sprite.setVelocityX(speed); sprite.flipX = false; }
         else { sprite.setVelocityX(0); }
 
-        // Para Sofía (char1) y Mario (char3), gestionar overlay de caminar
-        if ((charIndex === 1 && this.textures.exists('sofia_walk') && this.anims.exists('sofia_walk')) ||
-            (charIndex === 3 && this.textures.exists('mario_walk') && this.anims.exists('mario_walk'))) {
-            
-            const walkTexture = charIndex === 1 ? 'sofia_walk' : 'mario_walk';
-            const walkAnim = charIndex === 1 ? 'sofia_walk' : 'mario_walk';
-            
+        // Overlays de caminar para Charles (char0), Sofía (char1), Franchesca (char2) y Mario (char3)
+        if (
+            (charIndex === 0 && this.textures.exists('char0_walk') && this.anims.exists('char0_walk')) ||
+            (charIndex === 1 && this.textures.exists('sofia_walk') && this.anims.exists('sofia_walk')) ||
+            (charIndex === 2 && this.textures.exists('char2_walk') && this.anims.exists('char2_walk')) ||
+            (charIndex === 3 && this.textures.exists('mario_walk') && this.anims.exists('mario_walk'))
+        ) {
             const isMoving = left || right;
-            if (isMoving && !player.walkOverlay) {
+            // Si Charles está transformado, no debe mostrar animación de caminar (queda en frame 0 de trans)
+            const blockCharlesWalk = (charIndex === 0 && player.transformed === true);
+            if (isMoving && !player.walkOverlay && !blockCharlesWalk) {
+                let walkTexture, walkAnim;
+                if (charIndex === 0) { walkTexture = 'char0_walk'; walkAnim = 'char0_walk'; }
+                else if (charIndex === 1) { walkTexture = 'sofia_walk'; walkAnim = 'sofia_walk'; }
+                else if (charIndex === 2) { walkTexture = 'char2_walk'; walkAnim = 'char2_walk'; }
+                else { walkTexture = 'mario_walk'; walkAnim = 'mario_walk'; }
                 // Crear overlay de caminar
                 const walkSprite = this.add.sprite(sprite.x, sprite.y, walkTexture, 0).setDepth(sprite.depth + 1);
                 walkSprite.setOrigin(0.5, 0.5);
                 walkSprite.flipX = sprite.flipX;
                 walkSprite.play(walkAnim);
                 player.walkOverlay = walkSprite;
-            } else if (!isMoving && player.walkOverlay) {
-                // Destruir overlay de caminar cuando se detiene
+            } else if ((!isMoving || blockCharlesWalk) && player.walkOverlay) {
+                // Destruir overlay de caminar cuando se detiene o cuando Charles está transformado
                 try {
                     if (player.walkOverlay && player.walkOverlay.scene) player.walkOverlay.destroy();
                     player.walkOverlay = null;
@@ -2558,17 +2940,35 @@ class GameScene extends Phaser.Scene {
         if (punch && (time - player.lastPunch) > player.punchCD) {
             player.lastPunch = time;
             
-            // Para Sofía (char1) y Mario (char3), crear sprite de animación de golpe
-            if ((charIndex === 1 && this.textures.exists('sofia_punch') && this.anims.exists('sofia_punch')) ||
-                (charIndex === 3 && this.textures.exists('mario_punch') && this.anims.exists('mario_punch'))) {
-                
-                const punchTexture = charIndex === 1 ? 'sofia_punch' : 'mario_punch';
-                const punchAnim = charIndex === 1 ? 'sofia_punch' : 'mario_punch';
-                
+            // Overlays de golpe para Charles (char0), Sofía (char1), Franchesca (char2) y Mario (char3)
+            if (
+                (charIndex === 0 && (this.textures.exists('char0_punch') || this.textures.exists('char0_trans')) ) ||
+                (charIndex === 1 && this.textures.exists('sofia_punch') && this.anims.exists('sofia_punch')) ||
+                (charIndex === 2 && this.textures.exists('char2_punch') && this.anims.exists('char2_punch')) ||
+                (charIndex === 3 && this.textures.exists('mario_punch') && this.anims.exists('mario_punch'))
+            ) {
+                // Selección de recurso y animación
+                let punchTexture, punchAnim;
+                if (charIndex === 0) {
+                    // Si Charles está transformado, usar golpe de trans (frames 0-3 de pj1-trans)
+                    const useTrans = player.transformed === true && this.textures.exists('char0_trans') && this.anims.exists('char0_trans_punch');
+                    punchTexture = useTrans ? 'char0_trans' : 'char0_punch';
+                    punchAnim = useTrans ? 'char0_trans_punch' : 'char0_punch';
+                } else if (charIndex === 1) {
+                    punchTexture = 'sofia_punch';
+                    punchAnim = 'sofia_punch';
+                } else if (charIndex === 2) {
+                    punchTexture = 'char2_punch';
+                    punchAnim = 'char2_punch';
+                } else { // charIndex === 3
+                    punchTexture = 'mario_punch';
+                    punchAnim = 'mario_punch';
+                }
+
                 const punchSprite = this.add.sprite(sprite.x, sprite.y, punchTexture, 1).setDepth(sprite.depth + 1);
                 punchSprite.setOrigin(0.5, 0.5);
                 punchSprite.flipX = sprite.flipX;
-                punchSprite.play(punchAnim);
+                if (this.anims.exists(punchAnim)) punchSprite.play(punchAnim);
                 // Guardar referencia para seguir al jugador mientras dura la animación
                 player.punchOverlay = punchSprite;
                 // Ocultar el sprite base inicialmente
@@ -2618,6 +3018,15 @@ class GameScene extends Phaser.Scene {
                     });
                     // Evitar disparar inmediatamente; ya lo haremos al terminar la animación
                     return;
+                } else if (charIndex === 2 && this.textures.exists('char2_punch')) {
+                    // Franchesca disparo: usar solo frame 2 del spritesheet de punch (estático)
+                    try {
+                        sprite.setTexture('char2_punch');
+                        sprite.setFrame(2);
+                    } catch (e) { /* ignore */ }
+                    // Lock la acción por corto tiempo para mantener el frame visible
+                    player._lockedAction = 'shoot';
+                    player.actionLockUntil = time + 300;
                 } else {
                     // Para otros personajes, usar el sistema normal con lock
                     player._lockedAction = 'shoot';
@@ -2656,7 +3065,7 @@ class GameScene extends Phaser.Scene {
         // - Si blockOverlay o chargeOverlay activo: ocultar idle y otros overlays
         // - Si solo walkOverlay activo: ocultar idle siempre
         // - Si ninguno activo: mostrar todo
-        if (charIndex === 1 || charIndex === 3) {
+        if (charIndex === 0 || charIndex === 1 || charIndex === 2 || charIndex === 3) {
             const hasShoot = player.shootOverlay && player.shootOverlay.active;
             const hasPunch = player.punchOverlay && player.punchOverlay.active;
             const hasWalk = player.walkOverlay && player.walkOverlay.active;
@@ -2726,9 +3135,16 @@ class GameScene extends Phaser.Scene {
             if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop();
             const idleKey = `char${charIndex}_idle`;
             if (this.textures.exists(idleKey)) {
-                try { sprite.setTexture(idleKey); sprite.setFrame(0); } catch (e) { /* ignore */ }
+                try {
+                    sprite.setTexture(idleKey);
+                    if (charIndex === 2) sprite.setFrame(3); // Franchesca idle usa frame 3 de caminar
+                    else sprite.setFrame(0);
+                } catch (e) { /* ignore */ }
             } else {
-                try { sprite.setFrame(0); } catch (e) { /* ignore if frame not present */ }
+                try {
+                    if (charIndex === 2) sprite.setFrame(3);
+                    else sprite.setFrame(0);
+                } catch (e) { /* ignore if frame not present */ }
             }
         } else {
             // Force texture to the action key if available (covers single-frame and spritesheet cases)
@@ -2850,7 +3266,11 @@ class GameScene extends Phaser.Scene {
         
         // Siempre reproducir animación de puñetazo
         const attChar = (i === 0) ? this.player1Index : this.player2Index;
-        const atkPunchKey = `char${attChar}_punch`;
+        let atkPunchKey = `char${attChar}_punch`;
+        // Si Charles está transformado, usar animación especial de trans golpe (frames 0-3 de pj1-trans)
+        if (attChar === 0 && attacker.transformed && this.textures.exists('char0_trans')) {
+            atkPunchKey = 'char0_trans_punch';
+        }
         if (this.anims.exists(atkPunchKey)) {
             try { attacker.sprite.anims.play(atkPunchKey, true); } catch (e) { }
         } else if (this.textures.exists(atkPunchKey)) {
@@ -3089,6 +3509,9 @@ class GameScene extends Phaser.Scene {
 
         // Colisión con plataformas
         this.physics.add.collider(enemy, this.groundGroup);
+        if (this._tilemapSueloLayer) {
+            this.physics.add.collider(enemy, this._tilemapSueloLayer);
+        }
     }
 
     // Jefe final: sprite animado limpio y funcional
@@ -3106,16 +3529,16 @@ class GameScene extends Phaser.Scene {
         boss.setScale(1.8);
         boss.setCollideWorldBounds(true);
         
-        // Propiedades simples del jefe
-        boss.health = 1000;
-        boss.maxHealth = 1000;
-        boss.moveSpeed = 80;
-        boss.lastShot = 0;
-        boss.shotCooldown = 3500;
-        boss.lastAreaAttack = 0;
-        boss.areaAttackCooldown = 8000;
-        boss.lastJump = 0;
-        boss.reflecting = false;
+            // Propiedades del jefe (simple como enemigo terrestre)
+            boss.health = 1000;
+            boss.maxHealth = 1000;
+            boss.moveSpeed = 80;
+            boss.lastShot = 0;
+            boss.shotCooldown = 3500;
+            boss.lastAreaAttack = 0;
+            boss.areaAttackCooldown = 8000;
+            boss.lastJump = 0;
+            boss.reflectsProjectiles = true; // Siempre devuelve proyectiles como enemigo terrestre
 
         this.boss = boss;
         this.bossActive = true;
@@ -3123,45 +3546,55 @@ class GameScene extends Phaser.Scene {
         
         // Collider con el suelo
         this.physics.add.collider(boss, this.groundGroup);
+        if (this._tilemapSueloLayer) {
+            this.physics.add.collider(boss, this._tilemapSueloLayer);
+        }
         
-        // Overlap: proyectiles del jugador impactan al jefe
-        this.physics.add.overlap(this.projectiles, boss, (proj, bossSprite) => {
-            if (!proj || !proj.active || !this.boss || !this.bossActive) return;
-            
-            // Si el jefe está reflejando, devolver proyectil
-            if (this.boss.reflecting) {
-                try { proj.setTint(0x66ccff); } catch (e) {}
+            // Overlap: proyectiles del jugador contra el jefe
+            // - Si son de PARRY perfecto: dañan al jefe y se destruyen
+            // - Si son normales: se desvían hacia el jugador (no destruyen al tocar al jefe)
+            this.physics.add.overlap(this.projectiles, boss, (proj) => {
+                if (!proj || !proj.active || !this.boss || !this.bossActive) return;
+
+                // Si el proyectil viene marcado como parryReflected, dañar jefe y destruirlo
+                if (proj.parryReflected) {
+                    const damage = proj.damage || 70;
+                    this.boss.health = Math.max(0, this.boss.health - damage);
+                    // Efecto visual
+                    const flash = this.add.circle(proj.x, proj.y, 25, 0xff00ff, 0.8).setDepth(10);
+                    this.tweens.add({ targets: flash, alpha: 0, scale: 2, duration: 400, onComplete: () => { try { flash.destroy(); } catch (e) {} } });
+                    try { proj.destroy(); } catch (e) {}
+                    return;
+                }
+
+                // Evitar doble-procesado si ya fue desviado por el jefe
+                if (proj.isReflected && proj.shooter === -1) return;
+
+                // Desviar proyectil normal
+                proj.isReflected = true;
+                proj.parryReflected = false;
+                try { proj.setTint(0x9933ff); } catch (e) {}
+
+                if (this.boss && this.anims.exists('boss_attack')) {
+                    this.boss.play('boss_attack');
+                    this.boss.once('animationcomplete', () => {
+                        if (this.boss && this.anims.exists('boss_idle')) this.boss.play('boss_idle');
+                    });
+                }
+
                 const playerSprite = this.players[0] && this.players[0].sprite;
                 if (playerSprite && proj.body) {
                     const ang = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, playerSprite.x, playerSprite.y);
-                    const curSpeed = Math.max(350, Math.hypot(proj.body.velocity.x || 0, proj.body.velocity.y || 0));
+                    const curSpeed = Math.max(460, Math.hypot(proj.body.velocity.x || 0, proj.body.velocity.y || 0));
+                    proj.body.setAllowGravity(false);
                     proj.body.setVelocity(Math.cos(ang) * curSpeed, Math.sin(ang) * curSpeed);
                     proj.rotation = ang;
+                    proj.shooter = -1; // tratar como enemigo
                 }
-                proj.isReflected = true;
-                proj.shooter = -1;
-                // Cambiar de grupo sin destruir
+
                 this.projectiles.remove(proj, false, false);
                 this.enemyProjectiles.add(proj, false);
-                return;
-            }
-            
-            // Disparos al jefe: 3 de daño
-            this.boss.health = Math.max(0, this.boss.health - 3);
-            
-            // Flash visual
-            const flash = this.add.circle(proj.x, proj.y, 15, 0xff6600, 0.8).setDepth(10);
-            this.tweens.add({
-                targets: flash,
-                alpha: 0,
-                scale: 2,
-                duration: 300,
-                onComplete: () => { try { flash.destroy(); } catch (e) {} }
             });
-            
-            // Destruir proyectil
-            try { proj.destroy(); } catch (e) {}
-        });
         
         // Crear UNA sola barra de vida limpia
         const barWidth = 600;
@@ -3265,9 +3698,8 @@ class GameScene extends Phaser.Scene {
         const dist = Phaser.Math.Distance.Between(b.x, b.y, player.x, player.y);
         if (time - b.lastAreaAttack > b.areaAttackCooldown) {
             b.lastAreaAttack = time;
-            b.reflecting = true;
             
-            // Efecto visual AoE
+                // Efecto visual AoE (ataque de área)
             const areaCircle = this.add.circle(b.x, b.y, 300, 0xff0066, 0.3).setDepth(4);
             this.tweens.add({
                 targets: areaCircle,
@@ -3277,14 +3709,11 @@ class GameScene extends Phaser.Scene {
                 onComplete: () => { try { areaCircle.destroy(); } catch (e) {} }
             });
             
-            // Daño si jugador dentro del radio
+                // Daño AoE si jugador dentro del radio (100 de daño)
             if (dist < 300) {
                 this.applyDamageToPlayer(0, 100);
                 this.cameras.main.shake(200, 0.02);
             }
-            
-            // Desactivar reflejo tras 5s
-            this.time.delayedCall(5000, () => { if (b) b.reflecting = false; });
         }
 
         // Muerte del jefe
@@ -3566,6 +3995,17 @@ class GameScene extends Phaser.Scene {
                 player.specialActive = true;
                 player.specialTimer = time + 3000; // 3 segundos de daño continuo
 
+                // Animación de golpe que quema (pj1-skill1 frames 0-6)
+                const charIdx = (i === 0) ? this.player1Index : this.player2Index;
+                if (charIdx === 0) {
+                    const fireKey = 'char0_punch_fire';
+                    if (this.anims.exists(fireKey)) {
+                        try { sprite.anims.play(fireKey, false); } catch (e) { }
+                    } else if (this.textures.exists(fireKey)) {
+                        try { sprite.setTexture(fireKey); sprite.setFrame(0); } catch (e) { }
+                    }
+                }
+
                 // Daño instantáneo y retroceso fuerte (pero no exagerado)
                 target.health = Math.max(0, target.health - 65);
                 const dir = (target.sprite.x > sprite.x) ? 1 : -1;
@@ -3591,7 +4031,11 @@ class GameScene extends Phaser.Scene {
         if (player.transformed) {
             sprite.setTint(0xffcc00); // Color de transformación
             player.blocking = false; // No puede bloquear
-                if (time > player.transformTimer) {
+            // Visual: mantener siempre frame 0 de pj1-trans
+            if (this.textures.exists('char0_trans')) {
+                try { sprite.setTexture('char0_trans'); sprite.setFrame(0); } catch (e) { }
+            }
+            if (time > player.transformTimer) {
                 player.transformed = false;
                 if (sprite.clearTint) sprite.clearTint(); // Restaurar colores originales
             }
@@ -3650,13 +4094,9 @@ class GameScene extends Phaser.Scene {
             player.transformed = true;
             player.transformTimer = time + 8000; // Dura 8 segundos (ajusta si quieres)
             player.transformBuffer = [];
-            // reproducir animación especial golpe-fuego si existe
-            const charIdx = (i === 0) ? this.player1Index : this.player2Index;
-            const key = `char${charIdx}_punch_fire`;
-            if (this.anims.exists(key)) {
-                try { sprite.anims.play(key, false); } catch (e) { /* ignore */ }
-            } else if (this.textures.exists(key)) {
-                try { sprite.setTexture(key); sprite.setFrame(0); } catch (e) { }
+            // Visual inicial de transformación: mantener frame 0 de pj1-trans (se fuerza en el branch transformado)
+            if (this.textures.exists('char0_trans')) {
+                try { sprite.setTexture('char0_trans'); sprite.setFrame(0); } catch (e) { }
             }
         }
     }
@@ -4187,9 +4627,37 @@ class GameScene extends Phaser.Scene {
         // Si la habilidad está pendiente, no puede moverse ni hacer nada
         if (player.franchescaJumpPending) {
             sprite.setVelocityX(0);
+            
+            // Reproducir animación de ataque aéreo si está disponible
+            if (this.textures.exists('fran_air_aoe') && this.anims.exists('fran_air_aoe')) {
+                if (!player.franAoeOverlay) {
+                    const aoeSprite = this.add.sprite(sprite.x, sprite.y, 'fran_air_aoe', 0).setDepth(sprite.depth + 1);
+                    aoeSprite.setOrigin(0.5, 0.5);
+                    aoeSprite.flipX = sprite.flipX;
+                    aoeSprite.play('fran_air_aoe');
+                    player.franAoeOverlay = aoeSprite;
+                    // Ocultar sprite base
+                    try { sprite.setAlpha(0); } catch (e) { }
+                }
+                // Seguir jugador con overlay
+                if (player.franAoeOverlay && player.franAoeOverlay.active) {
+                    player.franAoeOverlay.x = sprite.x;
+                    player.franAoeOverlay.y = sprite.y;
+                    player.franAoeOverlay.flipX = sprite.flipX;
+                }
+            }
+            
             // Espera el timer para el corte
             if (time > player.franchescaJumpTimer) {
                 player.franchescaJumpPending = false;
+                
+                // Destruir overlay de AoE
+                if (player.franAoeOverlay && player.franAoeOverlay.scene) {
+                    player.franAoeOverlay.destroy();
+                    player.franAoeOverlay = null;
+                }
+                // Restaurar visibilidad
+                try { sprite.setAlpha(1); } catch (e) { }
                 // Ataque en área
                 const target = this.players[1 - i];
                 const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, target.sprite.x, target.sprite.y);
@@ -4338,6 +4806,14 @@ class GameScene extends Phaser.Scene {
             player.franchescaLaserBuffer[1].k === "R" &&
             player.franchescaLaserBuffer[2].k === "X"
         ) {
+            // Mostrar frame 2 estático durante robo
+            if (this.textures.exists('char2_punch')) {
+                try {
+                    sprite.setTexture('char2_punch');
+                    sprite.setFrame(2);
+                } catch (e) { /* ignore */ }
+            }
+            
             // Si el objetivo está bloqueando, no roba
             if (target.blocking) {
                 this.cameras.main.flash(120, 80, 80, 80);
@@ -4881,6 +5357,10 @@ class VictoryScene extends Phaser.Scene {
         this.mode = data.mode || 'cooperativo';
     }
     create() {
+        // No música de menú en la pantalla de victoria
+        stopMenuMusic(this);
+        // Detener música de batalla
+        stopBattleMusic(this);
         const { width, height } = this.scale;
         this.cameras.main.setBackgroundColor(0x003311);
         
@@ -4901,8 +5381,12 @@ class VictoryScene extends Phaser.Scene {
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
             try { this.textures.remove('map1'); } catch (e) {}
+            try { this.textures.remove('map2'); } catch (e) {}
             this.scene.stop('VictoryScene');
-            this.scene.start('GameScene', { player1Index: this.player1Index, player2Index: this.player2Index, mode: this.mode, map: 'Mapa 1' });
+            // Small delay for clean state
+            this.time.delayedCall(100, () => {
+                this.scene.start('GameScene', { player1Index: this.player1Index, player2Index: this.player2Index, mode: this.mode, map: 'Mapa 1' });
+            });
         }});
 
         const charSelBtn = this.add.rectangle(bx, by, buttonW, buttonH, 0x003355).setInteractive();
@@ -4911,8 +5395,12 @@ class VictoryScene extends Phaser.Scene {
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
             try { this.textures.remove('map1'); } catch (e) {}
+            try { this.textures.remove('map2'); } catch (e) {}
             this.scene.stop('VictoryScene');
-            this.scene.start('CharacterSelector', { mode: this.mode });
+            // Small delay for clean state
+            this.time.delayedCall(100, () => {
+                this.scene.start('CharacterSelector', { mode: this.mode });
+            });
         }});
 
         const menuBtn = this.add.rectangle(bx + (buttonW + spacing), by, buttonW, buttonH, 0x002244).setInteractive();
@@ -4921,8 +5409,12 @@ class VictoryScene extends Phaser.Scene {
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
             try { this.textures.remove('map1'); } catch (e) {}
+            try { this.textures.remove('map2'); } catch (e) {}
             this.scene.stop('VictoryScene');
-            this.scene.start('Menu');
+            // Small delay for clean state
+            this.time.delayedCall(100, () => {
+                this.scene.start('Menu');
+            });
         }});
 
         // Selector visual
@@ -4989,6 +5481,9 @@ class GameOver extends Phaser.Scene {
         this.mode = data.mode || 'versus';
     }
     create() {
+        // No música de menú en Game Over
+        stopMenuMusic(this);
+        stopBattleMusic(this);
         const { width, height } = this.scale;
         this.cameras.main.setBackgroundColor(0x001d33);
         
@@ -5016,10 +5511,14 @@ class GameOver extends Phaser.Scene {
             // Reiniciar: detener escenas y reiniciar GameScene
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            // remove map texture so next GameScene will reload and position it cleanly
+            // remove map textures to avoid issues
             try { this.textures.remove('map1'); } catch (e) {}
+            try { this.textures.remove('map2'); } catch (e) {}
             this.scene.stop('GameOver');
-            this.scene.start('GameScene', { player1Index: this.player1Index, player2Index: this.player2Index, mode: this.mode, map: 'Mapa 1' });
+            // Small delay to ensure clean state
+            this.time.delayedCall(100, () => {
+                this.scene.start('GameScene', { player1Index: this.player1Index, player2Index: this.player2Index, mode: this.mode, map: 'Mapa 1' });
+            });
         }});
 
         const charSelBtn = this.add.rectangle(bx, by, buttonW, buttonH, 0x003355).setInteractive();
@@ -5028,10 +5527,14 @@ class GameOver extends Phaser.Scene {
             // Ir a selector de personaje: detener GameScene/HudScene primero
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            // remove map texture to avoid background staying behind or being mispositioned
+            // remove map textures to avoid background issues
             try { this.textures.remove('map1'); } catch (e) {}
+            try { this.textures.remove('map2'); } catch (e) {}
             this.scene.stop('GameOver');
-            this.scene.start('CharacterSelector', { mode: this.mode });
+            // Small delay for clean state
+            this.time.delayedCall(100, () => {
+                this.scene.start('CharacterSelector', { mode: this.mode });
+            });
         }});
 
         const menuBtn = this.add.rectangle(bx + (buttonW + spacing), by, buttonW, buttonH, 0x002244).setInteractive();
@@ -5040,10 +5543,14 @@ class GameOver extends Phaser.Scene {
             // Volver al menú: detener escenas primero
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            // remove map texture to avoid background issues on next run
+            // remove map textures to avoid background issues
             try { this.textures.remove('map1'); } catch (e) {}
+            try { this.textures.remove('map2'); } catch (e) {}
             this.scene.stop('GameOver');
-            this.scene.start('Menu');
+            // Small delay for clean state
+            this.time.delayedCall(100, () => {
+                this.scene.start('Menu');
+            });
         }});
 
         // Selector visual

@@ -19,6 +19,8 @@ export class Preloader extends Phaser.Scene {
     this.load.spritesheet('disparo', 'player/pj2/pj2-disparo.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('golpe', 'player/pj2/PJ2-golpe.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('bala', 'player/pj2/pj2-bala.png', { frameWidth: 64, frameHeight: 64 });
+    // Mario (pj4) - láser de sangre (104x64, frames 0..14)
+    this.load.spritesheet('mario_laser_sangre', 'player/pj4/laser-sangre.png', { frameWidth: 104, frameHeight: 64 });
     // Si quieres agregar más personajes, sigue el mismo patrón.
 
         // Bullets
@@ -85,6 +87,19 @@ export class Preloader extends Phaser.Scene {
                 frameRate: 5,
                 repeat: 0
             });
+
+            // Mario (pj4) - láser de sangre frames 0..14 (no loop)
+            if (this.textures.exists('mario_laser_sangre') && !this.anims.exists('mario_laser_sangre')) {
+                const tex = this.textures.get('mario_laser_sangre');
+                let totalFrames = 1;
+                try {
+                    if (tex && typeof tex.frameTotal === 'number') totalFrames = Math.max(1, tex.frameTotal);
+                    else if (tex && tex.frames) totalFrames = Math.max(1, Object.keys(tex.frames).filter(k => !isNaN(+k)).length);
+                } catch (e) { totalFrames = 1; }
+                const endFrame = Math.min(14, Math.max(0, totalFrames - 1));
+                const frames = this.anims.generateFrameNumbers('mario_laser_sangre', { start: 0, end: endFrame });
+                this.anims.create({ key: 'mario_laser_sangre', frames, frameRate: 18, repeat: 0 });
+            }
         } catch (e) { /* ignore if assets missing or frames invalid */ }
 
         // Cuando quieras pasar a la siguiente escena
