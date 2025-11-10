@@ -94,10 +94,7 @@ function stopMenuMusic(scene) {
                 if (game.menuMusic.isPlaying) {
                     game.menuMusic.stop(); 
                 }
-                // Destruir el objeto para evitar que se reactive
-                if (game.menuMusic.destroy) {
-                    game.menuMusic.destroy();
-                }
+                // No destruir - solo detener y establecer en null para que se recree después
                 game.menuMusic = null;
             } catch (e) { /* ignore */ }
         }
@@ -106,8 +103,6 @@ function stopMenuMusic(scene) {
             try { 
                 game.menuMusicTag.pause(); 
                 game.menuMusicTag.currentTime = 0;
-                // Remover src para liberar el recurso
-                game.menuMusicTag.src = '';
                 game.menuMusicTag = null;
             } catch (e) { /* ignore */ }
         }
@@ -164,10 +159,7 @@ function stopBattleMusic(scene) {
                 if (game.battleMusic.isPlaying) {
                     game.battleMusic.stop(); 
                 }
-                // Destruir el objeto para evitar que se reactive
-                if (game.battleMusic.destroy) {
-                    game.battleMusic.destroy();
-                }
+                // No destruir - solo detener y establecer en null para que se recree después
                 game.battleMusic = null;
             } catch (e) { /* ignore */ }
         }
@@ -176,8 +168,6 @@ function stopBattleMusic(scene) {
             try { 
                 game.battleMusicTag.pause(); 
                 game.battleMusicTag.currentTime = 0;
-                // Remover src para liberar el recurso
-                game.battleMusicTag.src = '';
                 game.battleMusicTag = null;
             } catch (e) { /* ignore */ }
         }

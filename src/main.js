@@ -1,4 +1,6 @@
-// main.js
+// main.js (module entrypoint)
+// Import core game logic & scenes definitions
+import '../game.js';
 
 // Configuración principal de Phaser
 const gameConfig = {
