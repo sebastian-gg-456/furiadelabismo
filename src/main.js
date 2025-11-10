@@ -1,6 +1,6 @@
 // main.js (module entrypoint)
-// Import core game logic & scenes definitions
-import '../game.js';
+// Import core scene classes from game.js (ES module)
+import { Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver } from '../game.js';
 
 // Configuración principal de Phaser
 const gameConfig = {

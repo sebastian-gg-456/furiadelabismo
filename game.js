@@ -5596,3 +5596,6 @@ class GameOver extends Phaser.Scene {
     selectCurrent() { if (this.buttons && this.buttons[this.selectedIndex]) this.buttons[this.selectedIndex].callback(); }
 }
 
+// Export scene classes for ES module consumers (Vite build)
+export { Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver };
+
