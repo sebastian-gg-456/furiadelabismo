@@ -1,6 +1,6 @@
 // main.js (module entrypoint)
 // Import core scene classes from game.js (ES module)
-import { Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver } from '../game.js';
+import { LoginScene, Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver } from '../game.js';
 
 // Configuración principal de Phaser
 const gameConfig = {
@@ -22,7 +22,7 @@ const gameConfig = {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    scene: [Preloader, Menu, ModeSelector, CharacterSelector, MapSelector, GameScene, ControlsScene, GameOver] // <-- aquí deben estar las clases
+    scene: [LoginScene, Preloader, Menu, ModeSelector, CharacterSelector, MapSelector, GameScene, ControlsScene, GameOver] // <-- LoginScene ahora es la primera
 };
 
 // Inicializar el juego

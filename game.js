@@ -1,8 +1,128 @@
 ﻿// game.js
 // ========================
+// --- SISTEMA DE SESIONES Y LOGIN ---
+// ========================
+
+// Gestión de sesiones con localStorage
+const SessionManager = {
+    // Obtener todas las sesiones guardadas
+    getAllSessions() {
+        const sessions = localStorage.getItem('gameSessions');
+        return sessions ? JSON.parse(sessions) : {};
+    },
+
+    // Crear una nueva sesión
+    createSession(username, character, difficulty) {
+        const sessions = this.getAllSessions();
+        const sessionId = username + '_' + Date.now();
+        
+        sessions[sessionId] = {
+            id: sessionId,
+            username: username,
+            character: character,
+            difficulty: difficulty,
+            createdAt: new Date().toISOString(),
+            lastPlayed: new Date().toISOString(),
+            sessionStartTime: Date.now(), // Inicio de la sesión actual
+            totalPlayTime: 0, // Tiempo total de juego acumulado (ms)
+            progress: {
+                level: 1,
+                score: 0,
+                coins: 0,
+                enemies_defeated: 0
+            }
+        };
+        
+        localStorage.setItem('gameSessions', JSON.stringify(sessions));
+        localStorage.setItem('currentSession', sessionId);
+        return sessions[sessionId];
+    },
+
+    // Cargar una sesión existente
+    loadSession(sessionId) {
+        const sessions = this.getAllSessions();
+        if (sessions[sessionId]) {
+            sessions[sessionId].lastPlayed = new Date().toISOString();
+            sessions[sessionId].sessionStartTime = Date.now(); // Reiniciar tiempo actual
+            localStorage.setItem('gameSessions', JSON.stringify(sessions));
+            localStorage.setItem('currentSession', sessionId);
+            return sessions[sessionId];
+        }
+        return null;
+    },
+
+    // Obtener la sesión actual
+    getCurrentSession() {
+        const currentSessionId = localStorage.getItem('currentSession');
+        if (currentSessionId) {
+            return this.getAllSessions()[currentSessionId] || null;
+        }
+        return null;
+    },
+
+    // Eliminar una sesión
+    deleteSession(sessionId) {
+        const sessions = this.getAllSessions();
+        delete sessions[sessionId];
+        localStorage.setItem('gameSessions', JSON.stringify(sessions));
+        if (localStorage.getItem('currentSession') === sessionId) {
+            localStorage.removeItem('currentSession');
+        }
+    },
+
+    // Actualizar progreso de sesión actual
+    updateSessionProgress(progressData) {
+        const currentSessionId = localStorage.getItem('currentSession');
+        if (currentSessionId) {
+            const sessions = this.getAllSessions();
+            if (sessions[currentSessionId]) {
+                sessions[currentSessionId].progress = {
+                    ...sessions[currentSessionId].progress,
+                    ...progressData
+                };
+                localStorage.setItem('gameSessions', JSON.stringify(sessions));
+            }
+        }
+    },
+
+    // Finalizar sesión y guardar tiempo de juego
+    endSession() {
+        const currentSessionId = localStorage.getItem('currentSession');
+        if (currentSessionId) {
+            const sessions = this.getAllSessions();
+            if (sessions[currentSessionId]) {
+                const sessionStartTime = sessions[currentSessionId].sessionStartTime || Date.now();
+                const timeElapsed = Date.now() - sessionStartTime;
+                sessions[currentSessionId].totalPlayTime += timeElapsed;
+                sessions[currentSessionId].sessionStartTime = null;
+                localStorage.setItem('gameSessions', JSON.stringify(sessions));
+            }
+        }
+    },
+
+    // Obtener tiempo jugado en la sesión actual (en minutos)
+    getCurrentSessionPlayTime() {
+        const currentSessionId = localStorage.getItem('currentSession');
+        if (currentSessionId) {
+            const sessions = this.getAllSessions();
+            if (sessions[currentSessionId]) {
+                const startTime = sessions[currentSessionId].sessionStartTime;
+                const totalTime = sessions[currentSessionId].totalPlayTime || 0;
+                if (startTime) {
+                    return Math.floor((totalTime + (Date.now() - startTime)) / 1000 / 60); // minutos
+                }
+                return Math.floor(totalTime / 1000 / 60);
+            }
+        }
+        return 0;
+    }
+};
+
+// ========================
 // --- VARIABLES GLOBALES ---
 // ========================
 let isEnglish = false;
+let currentPlayer = null; // Sesión del jugador actual
 
 // Utility: safe get pad
 function getPad(idx, scene) {
@@ -29,6 +149,315 @@ if (typeof Phaser !== 'undefined' && Phaser.GameObjects && Phaser.GameObjects.Ga
 // ========================
 // --- ESCENAS ---
 // ========================
+
+// --- ESCENA LOGIN ---
+export class LoginScene extends Phaser.Scene {
+    constructor() { 
+        super("Login");
+        this.selectedIndex = 0;
+        this.buttons = [];
+        this.currentMode = 'login'; // 'login' o 'create'
+        this.gamepadIndex = 0;
+        this.lastGamepadInput = 0;
+    }
+
+    create() {
+        const { width, height } = this.cameras.main;
+        // Fondo de menú (si existe el asset fondo-menu.webp en public/mapas)
+        try { ensureMenuBackground(this); } catch (e) {}
+        // Fallback: si no cargó la imagen, mantener rectángulo simple
+        this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
+        
+        // Título
+        this.add.text(width / 2, 80, 'FURIA DE LA ABISMO', {
+            font: 'bold 48px Arial',
+            fill: '#fff'
+        }).setOrigin(0.5);
+
+        this.add.text(width / 2, 140, 'Sistema de Sesiones', {
+            font: '24px Arial',
+            fill: '#00ff00'
+        }).setOrigin(0.5);
+
+        // Obtener sesiones existentes
+        const sessions = SessionManager.getAllSessions();
+        const sessionsList = Object.values(sessions);
+
+        // Si hay sesiones guardadas, mostrar opción de cargarlas
+        if (sessionsList.length > 0) {
+            this.add.text(width / 2, 200, 'Sesiones Guardadas:', {
+                font: 'bold 20px Arial',
+                fill: '#ffff00'
+            }).setOrigin(0.5);
+
+            let yPos = 250;
+            let buttonIndex = 0;
+            sessionsList.forEach((session, index) => {
+                const playTime = Math.floor((session.totalPlayTime || 0) / 1000 / 60); // minutos
+                const sessionText = `${session.username} - Lvl ${session.progress.level} (${session.character}) - ${playTime}m`;
+                const button = this.add.text(width / 2, yPos, sessionText, {
+                    font: '18px Arial',
+                    fill: '#00ff00',
+                    backgroundColor: '#0a0a1a',
+                    padding: { x: 20, y: 10 }
+                })
+                    .setOrigin(0.5)
+                    .setInteractive()
+                    .on('pointerover', () => {
+                        this.selectedIndex = buttonIndex;
+                        this.updateButtonSelection();
+                    })
+                    .on('pointerdown', () => {
+                        SessionManager.loadSession(session.id);
+                        currentPlayer = session;
+                        this.scene.start('Preloader');
+                    });
+
+                this.buttons.push({
+                    text: button,
+                    type: 'session',
+                    sessionId: session.id
+                });
+                buttonIndex++;
+                yPos += 60;
+            });
+
+            // Botón para nueva sesión
+            const newSessionButton = this.add.text(width / 2, yPos + 40, '+ NUEVA SESIÓN', {
+                font: 'bold 18px Arial',
+                fill: '#ffffff',
+                backgroundColor: '#0066ff',
+                padding: { x: 30, y: 15 }
+            })
+                .setOrigin(0.5)
+                .setInteractive()
+                .on('pointerover', () => {
+                    this.selectedIndex = buttonIndex;
+                    this.updateButtonSelection();
+                })
+                .on('pointerdown', () => this.showCreateSessionForm());
+
+            this.buttons.push({
+                text: newSessionButton,
+                type: 'new'
+            });
+
+            this.currentMode = 'login';
+            this.updateButtonSelection();
+        } else {
+            // Si no hay sesiones, mostrar formulario directo
+            this.add.text(width / 2, 220, 'No hay sesiones guardadas', {
+                font: '18px Arial',
+                fill: '#ff9999'
+            }).setOrigin(0.5);
+
+            this.showCreateSessionForm();
+        }
+
+        // Configurar input de joystick
+        this.input.gamepad.on('connected', (pad) => {
+            this.gamepadIndex = pad.index;
+        });
+    }
+
+    update() {
+        if (this.currentMode !== 'login') return;
+
+        const pad = this.input.gamepad.gamepads[this.gamepadIndex];
+        if (!pad) return;
+
+        const now = Date.now();
+        if (now - this.lastGamepadInput < 200) return; // Debounce
+
+        // Navegar con D-Pad o Analog Stick
+        const dpadUp = pad.buttons[12].pressed;
+        const dpadDown = pad.buttons[13].pressed;
+        const leftStickUp = pad.axes[1].value < -0.5;
+        const leftStickDown = pad.axes[1].value > 0.5;
+
+        if (dpadUp || leftStickUp) {
+            this.selectedIndex = (this.selectedIndex - 1 + this.buttons.length) % this.buttons.length;
+            this.lastGamepadInput = now;
+            this.updateButtonSelection();
+        } else if (dpadDown || leftStickDown) {
+            this.selectedIndex = (this.selectedIndex + 1) % this.buttons.length;
+            this.lastGamepadInput = now;
+            this.updateButtonSelection();
+        }
+
+        // Seleccionar con A button (0) o Start (9)
+        if (pad.buttons[0].pressed || pad.buttons[9].pressed) {
+            this.lastGamepadInput = now;
+            const button = this.buttons[this.selectedIndex];
+            if (button.type === 'session') {
+                SessionManager.loadSession(button.sessionId);
+                currentPlayer = SessionManager.getCurrentSession();
+                this.scene.start('Preloader');
+            } else if (button.type === 'new') {
+                this.showCreateSessionForm();
+            }
+        }
+    }
+
+    updateButtonSelection() {
+        this.buttons.forEach((btn, index) => {
+            if (index === this.selectedIndex) {
+                btn.text.setFill('#ff0000');
+                btn.text.setBackgroundColor('#ff00ff');
+            } else {
+                if (btn.type === 'session') {
+                    btn.text.setFill('#00ff00');
+                    btn.text.setBackgroundColor('#0a0a1a');
+                } else {
+                    btn.text.setFill('#ffffff');
+                    btn.text.setBackgroundColor('#0066ff');
+                }
+            }
+        });
+    }
+
+    showCreateSessionForm() {
+        const { width, height } = this.cameras.main;
+        this.currentMode = 'create';
+
+        // Limpiar botones anteriores
+        this.buttons = [];
+        this.children.list.forEach(child => {
+            if (child !== this.children.list[0] && child !== this.children.list[1]) {
+                child.destroy();
+            }
+        });
+
+        this.add.text(width / 2, 200, 'Crear Nueva Sesión', {
+            font: 'bold 20px Arial',
+            fill: '#ffff00'
+        }).setOrigin(0.5);
+
+        // Campo de nombre de usuario
+        const userInput = document.createElement('input');
+        userInput.type = 'text';
+        userInput.placeholder = 'Nombre de usuario';
+        userInput.style.cssText = `
+            position: absolute;
+            left: ${width / 2 - 100}px;
+            top: 300px;
+            width: 200px;
+            padding: 10px;
+            font-size: 16px;
+            background: #1a1a2e;
+            color: #00ff00;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            z-index: 100;
+        `;
+        document.body.appendChild(userInput);
+        userInput.focus();
+
+        // Personajes con nombres reales
+        const characters = ['Charles', 'Sofía', 'Vex', 'Nova'];
+        let selectedCharIndex = 0;
+        const charButtons = [];
+
+        this.add.text(width / 2 - 100, 380, 'Personaje:', {
+            font: '14px Arial',
+            fill: '#ffffff'
+        });
+
+        let charYPos = 410;
+        characters.forEach((char, idx) => {
+            const button = this.add.text(width / 2 - 50, charYPos, char, {
+                font: '12px Arial',
+                fill: idx === selectedCharIndex ? '#ff0000' : '#00ff00',
+                backgroundColor: idx === selectedCharIndex ? '#ff00ff' : '#0a0a1a',
+                padding: { x: 10, y: 5 }
+            })
+                .setOrigin(0.5)
+                .setInteractive()
+                .on('pointerdown', () => {
+                    selectedCharIndex = idx;
+                    charButtons.forEach((btn, i) => {
+                        if (i === idx) {
+                            btn.setFill('#ff0000');
+                            btn.setBackgroundColor('#ff00ff');
+                        } else {
+                            btn.setFill('#00ff00');
+                            btn.setBackgroundColor('#0a0a1a');
+                        }
+                    });
+                });
+            charButtons.push(button);
+            charYPos += 35;
+        });
+
+        // Selector de dificultad
+        this.add.text(width / 2 - 100, 540, 'Dificultad:', {
+            font: '14px Arial',
+            fill: '#ffffff'
+        });
+
+        const difficulties = ['Fácil', 'Medio', 'Difícil'];
+        let selectedDiffIndex = 0;
+        const diffButtons = [];
+
+        let diffYPos = 570;
+        difficulties.forEach((diff, idx) => {
+            const button = this.add.text(width / 2 - 50, diffYPos, diff, {
+                font: '12px Arial',
+                fill: idx === selectedDiffIndex ? '#ff0000' : '#00ff00',
+                backgroundColor: idx === selectedDiffIndex ? '#ff00ff' : '#0a0a1a',
+                padding: { x: 10, y: 5 }
+            })
+                .setOrigin(0.5)
+                .setInteractive()
+                .on('pointerdown', () => {
+                    selectedDiffIndex = idx;
+                    diffButtons.forEach((btn, i) => {
+                        if (i === idx) {
+                            btn.setFill('#ff0000');
+                            btn.setBackgroundColor('#ff00ff');
+                        } else {
+                            btn.setFill('#00ff00');
+                            btn.setBackgroundColor('#0a0a1a');
+                        }
+                    });
+                });
+            diffButtons.push(button);
+            diffYPos += 35;
+        });
+
+        // Botón para crear sesión
+        const startButton = this.add.text(width / 2, height - 100, 'COMENZAR JUEGO', {
+            font: 'bold 18px Arial',
+            fill: '#ffffff',
+            backgroundColor: '#00ff00',
+            padding: { x: 30, y: 15 }
+        })
+            .setOrigin(0.5)
+            .setInteractive()
+            .on('pointerover', function() { this.setFill('#000000'); })
+            .on('pointerout', function() { this.setFill('#ffffff'); })
+            .on('pointerdown', () => {
+                const username = userInput.value || 'Jugador' + Math.floor(Math.random() * 10000);
+                
+                // Crear la sesión
+                const session = SessionManager.createSession(username, characters[selectedCharIndex], difficulties[selectedDiffIndex]);
+                currentPlayer = session;
+                
+                // Limpiar input
+                if (userInput.parentNode) {
+                    userInput.parentNode.removeChild(userInput);
+                }
+                
+                this.scene.start('Preloader');
+            });
+
+        // Instrucciones de joystick
+        this.add.text(width / 2, 30, '↑/↓ para navegar • A para seleccionar', {
+            font: '12px Arial',
+            fill: '#00ffff'
+        }).setOrigin(0.5);
+    }
+}
 
 // Global error hooks to capture stack traces for runtime errors (helps trace undefined removeAllListeners)
 if (typeof window !== 'undefined') {
@@ -174,8 +603,64 @@ function stopBattleMusic(scene) {
     } catch (e) { /* ignore */ }
 }
 
+// Helper: asegurar y mostrar fondo de menú (fondo-menu.webp en public/mapas)
+function ensureMenuBackground(scene) {
+    try {
+        const key = 'fondo_menu';
+        const relPath = 'mapas/fondo-menu.webp';
+        const absPath = '/mapas/fondo-menu.webp';
+
+        const addBg = function() {
+            try {
+                if (!scene || !scene.cameras) return;
+                const camWidth = scene.cameras.main.width;
+                const camHeight = scene.cameras.main.height;
+                // destroy existing bg if present
+                try { if (scene._bgImage && scene._bgImage.destroy) scene._bgImage.destroy(); } catch (e) {}
+                const img = scene.add.image(camWidth / 2, camHeight / 2, key).setOrigin(0.5, 0.5).setDepth(-100);
+                try { img.setDisplaySize(camWidth, camHeight); } catch (e) {}
+                img.setScrollFactor(0);
+                scene._bgImage = img;
+                // resize handler
+                try {
+                    scene.scale.on('resize', (gs) => {
+                        try {
+                            if (scene._bgImage) scene._bgImage.setDisplaySize(gs.width, gs.height).setPosition(gs.width / 2, gs.height / 2);
+                        } catch (e) {}
+                    });
+                } catch (e) {}
+            } catch (e) { /* ignore */ }
+        };
+
+        if (scene.textures && scene.textures.exists && scene.textures.exists(key)) {
+            addBg();
+            return;
+        }
+
+        // One-time loader handlers
+        scene.load.once('filecomplete-image-' + key, addBg, scene);
+        scene.load.once('loaderror', (file) => {
+            try {
+                if (file && file.key === key && !scene._fondoMenuRetry) {
+                    scene._fondoMenuRetry = true;
+                    scene.load.image(key, absPath);
+                    scene.load.start();
+                }
+            } catch (e) {}
+        }, scene);
+
+        // Start loading relative path first
+        try {
+            scene.load.image(key, relPath);
+            scene.load.start();
+        } catch (e) {
+            try { scene.load.image(key, absPath); scene.load.start(); } catch (ee) {}
+        }
+    } catch (e) { /* ignore */ }
+}
+
 // --- ESCENA PRELOADER ---
-class Preloader extends Phaser.Scene {
+export class Preloader extends Phaser.Scene {
     constructor() { super("Preloader"); }
     preload() {
         // Carga de assets para personajes (4 repos)
@@ -830,11 +1315,12 @@ class Preloader extends Phaser.Scene {
 
 
 // --- ESCENA MENU ---
-class Menu extends Phaser.Scene {
+export class Menu extends Phaser.Scene {
    
     constructor() { super("Menu"); }
     create() {
         const { width } = this.scale;
+        try { ensureMenuBackground(this); } catch (e) {}
         // Música de menú
         ensureMenuMusic(this);
         this.selectedIndex = 0;
@@ -848,6 +1334,8 @@ class Menu extends Phaser.Scene {
         };
 
         this.cameras.main.setBackgroundColor(0x001d33);
+
+        try { ensureMenuBackground(this); } catch (e) {}
         this.title = this.add.text(width / 2, 80, isEnglish ? "THE FURY OF THE ABYSS" : "LA FURIA DEL ABISMO", { font: "72px Arial", color: "#00e5ff" }).setOrigin(0.5);
 
         const buttonWidth = 250, buttonHeight = 70, spacing = 40;
@@ -957,7 +1445,7 @@ class Menu extends Phaser.Scene {
     }
 }
 // --- ESCENA CONTROLES ---
-class ControlsScene extends Phaser.Scene {
+export class ControlsScene extends Phaser.Scene {
     constructor() { super("ControlsScene"); }
     create() {
         const { width, height } = this.scale;
@@ -1038,11 +1526,12 @@ class ControlsScene extends Phaser.Scene {
 
 
 // --- ESCENA MODE SELECTOR ---
-class ModeSelector extends Phaser.Scene {
+export class ModeSelector extends Phaser.Scene {
     constructor() { super("ModeSelector"); }
     create() {
         // Música de menú
         ensureMenuMusic(this);
+        try { ensureMenuBackground(this); } catch (e) {}
         const { width, height } = this.scale;
         this.selectedIndex = 0;
         this.buttons = [];
@@ -1162,7 +1651,7 @@ class ModeSelector extends Phaser.Scene {
 }
 
 // --- ESCENA CHARACTER SELECTOR ---
-class CharacterSelector extends Phaser.Scene {
+export class CharacterSelector extends Phaser.Scene {
     constructor() { super("CharacterSelector"); }
     init(data) { this.selectedMode = data.mode || "versus"; }
 
@@ -1366,7 +1855,7 @@ class CharacterSelector extends Phaser.Scene {
 }
 
 // --- ESCENA MAP SELECTOR ---
-class MapSelector extends Phaser.Scene {
+export class MapSelector extends Phaser.Scene {
     constructor() { super("MapSelector"); }
     init(data) {
         this.player1Index = data.player1;
@@ -1379,6 +1868,7 @@ class MapSelector extends Phaser.Scene {
     create() {
         const { width, height } = this.scale;
         this.cameras.main.setBackgroundColor(0x001933);
+        try { ensureMenuBackground(this); } catch (e) {}
         this.title = this.add.text(width / 2, 80, isEnglish ? "Select a Map" : "Selecciona un Mapa", { font: "48px Arial", color: "#00ffff" }).setOrigin(0.5);
         this.mapText = this.add.text(width / 2, height / 2, this.maps[this.currentMap], { font: "36px Arial", color: "#66ffff" }).setOrigin(0.5);
 
@@ -1441,7 +1931,7 @@ class MapSelector extends Phaser.Scene {
 }
 
 // --- ESCENA GAME ---
-class GameScene extends Phaser.Scene {
+export class GameScene extends Phaser.Scene {
     constructor() { super("GameScene"); }
 
     init(data) {
@@ -5339,7 +5829,7 @@ class GameScene extends Phaser.Scene {
 }
 
 // --- ESCENA VICTORIA ---
-class VictoryScene extends Phaser.Scene {
+export class VictoryScene extends Phaser.Scene {
     constructor() { super('VictoryScene'); }
     init(data) {
         this.player1Index = data.player1Index ?? 0;
@@ -5370,8 +5860,8 @@ class VictoryScene extends Phaser.Scene {
         this.buttons.push({ rect: restartBtn, txt: restartTxt, callback: () => {
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            try { this.textures.remove('map1'); } catch (e) {}
-            try { this.textures.remove('map2'); } catch (e) {}
+            // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
+            // Si es necesario, limpiar sólo imágenes/objetos en la escena activa.
             this.scene.stop('VictoryScene');
             // Small delay for clean state
             this.time.delayedCall(100, () => {
@@ -5384,8 +5874,7 @@ class VictoryScene extends Phaser.Scene {
         this.buttons.push({ rect: charSelBtn, txt: charSelTxt, callback: () => {
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            try { this.textures.remove('map1'); } catch (e) {}
-            try { this.textures.remove('map2'); } catch (e) {}
+            // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
             this.scene.stop('VictoryScene');
             // Small delay for clean state
             this.time.delayedCall(100, () => {
@@ -5398,8 +5887,7 @@ class VictoryScene extends Phaser.Scene {
         this.buttons.push({ rect: menuBtn, txt: menuTxt, callback: () => {
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            try { this.textures.remove('map1'); } catch (e) {}
-            try { this.textures.remove('map2'); } catch (e) {}
+            // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
             this.scene.stop('VictoryScene');
             // Small delay for clean state
             this.time.delayedCall(100, () => {
@@ -5461,7 +5949,7 @@ class VictoryScene extends Phaser.Scene {
 }
 
 // --- ESCENA GAME OVER ---
-class GameOver extends Phaser.Scene {
+export class GameOver extends Phaser.Scene {
     constructor() { super('GameOver'); }
     init(data) {
         this.winnerIndex = data.winnerIndex ?? 0;
@@ -5501,9 +5989,7 @@ class GameOver extends Phaser.Scene {
             // Reiniciar: detener escenas y reiniciar GameScene
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            // remove map textures to avoid issues
-            try { this.textures.remove('map1'); } catch (e) {}
-            try { this.textures.remove('map2'); } catch (e) {}
+            // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
             this.scene.stop('GameOver');
             // Small delay to ensure clean state
             this.time.delayedCall(100, () => {
@@ -5517,9 +6003,7 @@ class GameOver extends Phaser.Scene {
             // Ir a selector de personaje: detener GameScene/HudScene primero
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            // remove map textures to avoid background issues
-            try { this.textures.remove('map1'); } catch (e) {}
-            try { this.textures.remove('map2'); } catch (e) {}
+            // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
             this.scene.stop('GameOver');
             // Small delay for clean state
             this.time.delayedCall(100, () => {
@@ -5533,9 +6017,7 @@ class GameOver extends Phaser.Scene {
             // Volver al menú: detener escenas primero
             try { this.scene.stop('HudScene'); } catch (e) {}
             try { this.scene.stop('GameScene'); } catch (e) {}
-            // remove map textures to avoid background issues
-            try { this.textures.remove('map1'); } catch (e) {}
-            try { this.textures.remove('map2'); } catch (e) {}
+            // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
             this.scene.stop('GameOver');
             // Small delay for clean state
             this.time.delayedCall(100, () => {
@@ -5595,7 +6077,4 @@ class GameOver extends Phaser.Scene {
     }
     selectCurrent() { if (this.buttons && this.buttons[this.selectedIndex]) this.buttons[this.selectedIndex].callback(); }
 }
-
-// Export scene classes for ES module consumers (Vite build)
-export { Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver };
 

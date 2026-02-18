@@ -9,7 +9,7 @@ export default defineConfig({
         strictPort: true,
         fs: {
             strict: false,
-            allow: ['..']
+            allow: ['.']
         }
     },
     build: {
