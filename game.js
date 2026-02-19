@@ -668,15 +668,10 @@ export class Preloader extends Phaser.Scene {
 
         const mapping = {
             repo1: {
-                // Charles (pj1) - reemplazos solicitados
-                // idle: usar primer frame de pj1-golpe
-                // walk: pj1-caminar (frames 0-3)
-                // punch: pj1-golpe (frames 0-3)
-                // punch_fire (combo que quema): pj1-skill1 (frames 0-6)
-                walk: 'pj1/pj1-caminar.png', idle: 'pj1/pj1-golpe.png', shoot: 'repo1/disparo-derecha.png',
-                punch: 'pj1/pj1-golpe.png', punch_fire: 'pj1/pj1-skill1.png', kick: 'repo1/patada-derecha.png',
-                block: 'repo1/bloqueo-derecha.png', charge: 'repo1/carga-energia-derecha.png',
-                hurt: 'repo1/caminar-herido-derecha.png', jump: 'repo1/salto-derecha.png'
+                // Charles (pj1)
+                walk: 'pj1/pj1-caminar.png', idle: 'pj1/pj1-golpe.png',
+                punch: 'pj1/pj1-golpe.png', punch_fire: 'pj1/pj1-skill1.png',
+                block: 'pj1/pj1-bloqueo-energia.png', charge: 'pj1/pj1-bloqueo-energia.png'
             },
             repo2: {
                 // Reemplazado: usamos un único spritesheet para Sofía (pj2/pj2-disparo.png)
@@ -687,13 +682,8 @@ export class Preloader extends Phaser.Scene {
             },
             repo3: {
                 // Franchesca (pj3)
-                // Caminar: pj3-caminar (0-3), Idle: usar SIEMPRE el frame 3 de pj3-caminar
-                // Golpe: pj3-ataque2 (0-3)
-                // Disparo: usar solo frame 2 de pj3-ataque2
-                // Robo: usar también frame 2 de pj3-ataque2
-                walk: 'pj3/pj3-caminar.png', idle: 'pj3/pj3-caminar.png', shoot: 'pj3/pj3-ataque2.png',
-                punch: 'pj3/pj3-ataque2.png', robo: 'pj3/pj3-ataque2.png', block: 'repo3/bloqueo3-derecha.png', charge: 'repo3/carga3-energia-derecha.png',
-                hurt: 'repo3/caminar3-herido-derecha.png', jump: 'repo3/salto3-derecha.png'
+                walk: 'pj3/pj3-caminar.png', idle: 'pj3/pj3-caminar.png', shoot: 'pj3/pj3-disparo.png',
+                punch: 'pj3/pj3-ataque2.png', robo: 'pj3/pj3-ataque2.png', block: 'pj3/pj3-bloqueo-energia.png', charge: 'pj3/pj3-bloqueo-energia.png'
             },
             repo4: {
                 // Mario (pj4) usará pj4-golpe.png: frame 0 = idle, frames 1-5 = punch
@@ -808,6 +798,8 @@ export class Preloader extends Phaser.Scene {
         this.load.setPath('assets/enemies');
         // Enemigo volador (spritesheet 64x64): frame 0 = idle, frames 0-1 = shoot animation
         this.load.spritesheet('flying_enemy', 'enemigo-ataque.png', { frameWidth: 64, frameHeight: 64 });
+        // Proyectil del enemigo volador (spritesheet 64x64): frames 0-10 vuelo, 10-16 impacto
+        this.load.spritesheet('enemy_projectile', 'enemigo-disparo.png', { frameWidth: 64, frameHeight: 64 });
         // Enemigo terrestre (spritesheet 64x64): frames 0-5 para moverse
         this.load.spritesheet('ground_enemy_walk', 'moverce-enemigo2.png', { frameWidth: 64, frameHeight: 64 });
         // Enemigo terrestre (spritesheet 64x64): frames 0-5 para atacar/desviar
@@ -816,6 +808,8 @@ export class Preloader extends Phaser.Scene {
         this.load.spritesheet('boss_walk', 'jefe-caminar.png', { frameWidth: 64, frameHeight: 64 });
         this.load.spritesheet('boss_attack', 'ataque-jefe.png', { frameWidth: 64, frameHeight: 64 });
         this.load.spritesheet('boss_death', 'muerte-jefe.png', { frameWidth: 64, frameHeight: 64 });
+        // Proyectil del jefe (10 frames, 64x64)
+        this.load.spritesheet('boss_projectile', 'jefe-disparo.png', { frameWidth: 64, frameHeight: 64 });
         
         this.load.setPath('assets/player');
     }
@@ -839,6 +833,13 @@ export class Preloader extends Phaser.Scene {
                 this.anims.create({ key: 'sofia_piedra_spin', frames, frameRate: 12, repeat: -1 });
             }
         } catch (e) { /* ignore piedra anim errors */ }
+        // Animación del proyectil del jefe (frames 0-9)
+        try {
+            if (this.textures.exists('boss_projectile') && !this.anims.exists('boss_projectile_fly')) {
+                const framesBoss = this.anims.generateFrameNumbers('boss_projectile', { start: 0, end: 9 });
+                this.anims.create({ key: 'boss_projectile_fly', frames: framesBoss, frameRate: 16, repeat: -1 });
+            }
+        } catch (e) { /* ignore boss projectile anim errors */ }
         // Animaciones de bala de Charles: vuelo (0-6) y golpe (7-9)
         try {
             if (this.textures.exists('charles_bullet')) {
@@ -1173,6 +1174,15 @@ export class Preloader extends Phaser.Scene {
                     const endFlyingShoot = Math.min(1, Math.max(0, totalFlyingShoot - 1));
                     const framesShoot = this.anims.generateFrameNumbers('flying_enemy', { start: 0, end: endFlyingShoot });
                     this.anims.create({ key: 'flying_enemy_shoot', frames: framesShoot, frameRate: 10, repeat: 0 });
+                }
+                // Animación de proyectil del enemigo volador (vuelo frames 0-10, impacto frames 10-16)
+                if (this.textures.exists('enemy_projectile') && !this.anims.exists('enemy_projectile_fly')) {
+                    const framesFly = this.anims.generateFrameNumbers('enemy_projectile', { start: 0, end: 10 });
+                    this.anims.create({ key: 'enemy_projectile_fly', frames: framesFly, frameRate: 16, repeat: -1 });
+                }
+                if (this.textures.exists('enemy_projectile') && !this.anims.exists('enemy_projectile_impact')) {
+                    const framesImpact = this.anims.generateFrameNumbers('enemy_projectile', { start: 10, end: 15 });
+                    this.anims.create({ key: 'enemy_projectile_impact', frames: framesImpact, frameRate: 16, repeat: 0 });
                 }
                 // Animación de caminar del enemigo terrestre (frames 0-5)
                 if (this.textures.exists('ground_enemy_walk') && !this.anims.exists('ground_enemy_walk')) {
@@ -4116,14 +4126,20 @@ export class GameScene extends Phaser.Scene {
         const player = this.players[0].sprite;
         const angle = Phaser.Math.Angle.Between(b.x, b.y, player.x, player.y);
         
-        const proj = this.physics.add.sprite(b.x, b.y - 40, 'tex_bullet');
-        proj.setTint(0x9933ff);
-        proj.setScale(2.2);
+        const proj = this.physics.add.sprite(b.x, b.y - 40, this.textures.exists('boss_projectile') ? 'boss_projectile' : 'tex_bullet');
+        if (!this.textures.exists('boss_projectile')) {
+            proj.setTint(0x9933ff);
+            proj.setScale(2.2);
+        }
         proj.damage = 50;
         this.enemyProjectiles.add(proj);
         proj.body.setAllowGravity(false);
         proj.body.setVelocity(Math.cos(angle) * 460, Math.sin(angle) * 460);
         proj.rotation = angle;
+        // Reproducir animación si existe
+        if (this.anims.exists('boss_projectile_fly')) {
+            proj.play('boss_projectile_fly');
+        }
         this.time.delayedCall(3500, () => { if (proj && proj.active) proj.destroy(); });
     }
 
@@ -4314,9 +4330,11 @@ export class GameScene extends Phaser.Scene {
                 // Disparar al terminar la animación
                 enemy.once('animationcomplete', () => {
                     // Crear proyectil enemigo después de la animación
-                    const proj = this.physics.add.sprite(enemy.x, enemy.y, 'tex_bullet');
-                    proj.setTint(0xff6600); // Color naranja para proyectiles enemigos
-                    proj.setScale(2.5); // Hacer el proyectil más grande
+                    const proj = this.physics.add.sprite(enemy.x, enemy.y, this.textures.exists('enemy_projectile') ? 'enemy_projectile' : 'tex_bullet');
+                    if (!this.textures.exists('enemy_projectile')) {
+                        proj.setTint(0xff6600); // Color naranja para proyectiles enemigos
+                        proj.setScale(2.5); // Hacer el proyectil más grande
+                    }
                     proj.damage = 35;
                     
                     this.enemyProjectiles.add(proj);
@@ -4328,7 +4346,37 @@ export class GameScene extends Phaser.Scene {
                     proj.body.setVelocity(vx, vy);
                     proj.rotation = angle;
                     
-                    // Destruir después de 3 segundos
+                    // Reproducir animación de vuelo si existe
+                    if (this.anims.exists('enemy_projectile_fly')) {
+                        proj.play('enemy_projectile_fly');
+                    }
+                    
+                    // Marcar como projectil volador para detectar impacto
+                    proj.isEnemyProjectile = true;
+                    
+                    // Detectar impacto con el jugador
+                    const playerSprite = this.players[0].sprite;
+                    const overlapCollider = this.physics.add.overlap(proj, playerSprite, () => {
+                        if (proj && proj.active) {
+                            // Cambiar a animación de impacto
+                            if (this.anims.exists('enemy_projectile_impact')) {
+                                proj.body.setVelocity(0, 0);
+                                proj.play('enemy_projectile_impact');
+                                // Esperar a que termine la animación para destruir
+                                proj.once('animationcomplete', () => {
+                                    if (proj && proj.active) proj.destroy();
+                                });
+                            } else {
+                                proj.destroy();
+                            }
+                            // Destruir el collider después del impacto
+                            if (overlapCollider) {
+                                this.physics.world.removeCollider(overlapCollider);
+                            }
+                        }
+                    });
+                    
+                    // Destruir después de 3 segundos de todas formas
                     this.time.delayedCall(3000, () => {
                         if (proj && proj.active) proj.destroy();
                     });
@@ -4344,9 +4392,11 @@ export class GameScene extends Phaser.Scene {
         }
         
         // Para enemigos que no tienen animación de disparo, disparar inmediatamente
-        const proj = this.physics.add.sprite(enemy.x, enemy.y, 'tex_bullet');
-        proj.setTint(0xff6600); // Color naranja para proyectiles enemigos
-        proj.setScale(2.5); // Hacer el proyectil más grande
+        const proj = this.physics.add.sprite(enemy.x, enemy.y, this.textures.exists('enemy_projectile') ? 'enemy_projectile' : 'tex_bullet');
+        if (!this.textures.exists('enemy_projectile')) {
+            proj.setTint(0xff6600); // Color naranja para proyectiles enemigos
+            proj.setScale(2.5); // Hacer el proyectil más grande
+        }
         proj.damage = 35;
         
         this.enemyProjectiles.add(proj);
