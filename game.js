@@ -12,7 +12,7 @@ const SessionManager = {
     },
 
     // Crear una nueva sesión
-    createSession(username, character, difficulty) {
+    createSession(username, character = "Charles", difficulty = "Normal") {
         const sessions = this.getAllSessions();
         const sessionId = username + "_" + Date.now();
 
@@ -346,21 +346,36 @@ export class LoginScene extends Phaser.Scene {
         const { width, height } = this.cameras.main;
         this.currentMode = "create";
 
-        // Limpiar botones anteriores
+        // Limpiar TODOS los elementos
         this.buttons = [];
+        const childrenToRemove = [];
         this.children.list.forEach((child) => {
-            if (
-                child !== this.children.list[0] &&
-                child !== this.children.list[1]
-            ) {
-                child.destroy();
+            childrenToRemove.push(child);
+        });
+        childrenToRemove.forEach(child => child.destroy());
+
+        // Limpiar cualquier input HTML previo
+        const existingInputs = document.querySelectorAll('input[type="text"]');
+        existingInputs.forEach(input => {
+            if (input.parentNode) {
+                input.parentNode.removeChild(input);
             }
         });
 
+        // Fondo azul oscuro simple
+        this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
+
         this.add
-            .text(width / 2, 200, "Crear Nueva Sesión", {
-                font: "bold 20px Arial",
+            .text(width / 2, 180, "Crear Nueva Sesión", {
+                font: "bold 24px Arial",
                 fill: "#ffff00",
+            })
+            .setOrigin(0.5);
+
+        this.add
+            .text(width / 2, 260, "Ingresa tu nombre de usuario:", {
+                font: "16px Arial",
+                fill: "#ffffff",
             })
             .setOrigin(0.5);
 
@@ -371,7 +386,7 @@ export class LoginScene extends Phaser.Scene {
         userInput.style.cssText = `
             position: absolute;
             left: ${width / 2 - 100}px;
-            top: 300px;
+            top: 310px;
             width: 200px;
             padding: 10px;
             font-size: 16px;
@@ -384,89 +399,13 @@ export class LoginScene extends Phaser.Scene {
         document.body.appendChild(userInput);
         userInput.focus();
 
-        // Personajes con nombres reales
-        const characters = ["Charles", "Sofía", "Vex", "Nova"];
-        let selectedCharIndex = 0;
-        const charButtons = [];
-
-        this.add.text(width / 2 - 100, 380, "Personaje:", {
-            font: "14px Arial",
-            fill: "#ffffff",
-        });
-
-        let charYPos = 410;
-        characters.forEach((char, idx) => {
-            const button = this.add
-                .text(width / 2 - 50, charYPos, char, {
-                    font: "12px Arial",
-                    fill: idx === selectedCharIndex ? "#ff0000" : "#00ff00",
-                    backgroundColor:
-                        idx === selectedCharIndex ? "#ff00ff" : "#0a0a1a",
-                    padding: { x: 10, y: 5 },
-                })
-                .setOrigin(0.5)
-                .setInteractive()
-                .on("pointerdown", () => {
-                    selectedCharIndex = idx;
-                    charButtons.forEach((btn, i) => {
-                        if (i === idx) {
-                            btn.setFill("#ff0000");
-                            btn.setBackgroundColor("#ff00ff");
-                        } else {
-                            btn.setFill("#00ff00");
-                            btn.setBackgroundColor("#0a0a1a");
-                        }
-                    });
-                });
-            charButtons.push(button);
-            charYPos += 35;
-        });
-
-        // Selector de dificultad
-        this.add.text(width / 2 - 100, 540, "Dificultad:", {
-            font: "14px Arial",
-            fill: "#ffffff",
-        });
-
-        const difficulties = ["Fácil", "Medio", "Difícil"];
-        let selectedDiffIndex = 0;
-        const diffButtons = [];
-
-        let diffYPos = 570;
-        difficulties.forEach((diff, idx) => {
-            const button = this.add
-                .text(width / 2 - 50, diffYPos, diff, {
-                    font: "12px Arial",
-                    fill: idx === selectedDiffIndex ? "#ff0000" : "#00ff00",
-                    backgroundColor:
-                        idx === selectedDiffIndex ? "#ff00ff" : "#0a0a1a",
-                    padding: { x: 10, y: 5 },
-                })
-                .setOrigin(0.5)
-                .setInteractive()
-                .on("pointerdown", () => {
-                    selectedDiffIndex = idx;
-                    diffButtons.forEach((btn, i) => {
-                        if (i === idx) {
-                            btn.setFill("#ff0000");
-                            btn.setBackgroundColor("#ff00ff");
-                        } else {
-                            btn.setFill("#00ff00");
-                            btn.setBackgroundColor("#0a0a1a");
-                        }
-                    });
-                });
-            diffButtons.push(button);
-            diffYPos += 35;
-        });
-
         // Botón para crear sesión
         const startButton = this.add
-            .text(width / 2, height - 100, "COMENZAR JUEGO", {
-                font: "bold 18px Arial",
+            .text(width / 2, height - 120, "COMENZAR JUEGO", {
+                font: "bold 20px Arial",
                 fill: "#ffffff",
                 backgroundColor: "#00ff00",
-                padding: { x: 30, y: 15 },
+                padding: { x: 40, y: 15 },
             })
             .setOrigin(0.5)
             .setInteractive()
@@ -478,15 +417,11 @@ export class LoginScene extends Phaser.Scene {
             })
             .on("pointerdown", () => {
                 const username =
-                    userInput.value ||
+                    userInput.value.trim() ||
                     "Jugador" + Math.floor(Math.random() * 10000);
 
-                // Crear la sesión
-                const session = SessionManager.createSession(
-                    username,
-                    characters[selectedCharIndex],
-                    difficulties[selectedDiffIndex],
-                );
+                // Crear la sesión con valores por defecto
+                const session = SessionManager.createSession(username);
                 currentPlayer = session;
 
                 // Limpiar input
@@ -497,9 +432,9 @@ export class LoginScene extends Phaser.Scene {
                 this.scene.start("Preloader");
             });
 
-        // Instrucciones de joystick
+        // Instrucciones
         this.add
-            .text(width / 2, 30, "↑/↓ para navegar • A para seleccionar", {
+            .text(width / 2, 30, "Escribe tu nombre y presiona COMENZAR JUEGO", {
                 font: "12px Arial",
                 fill: "#00ffff",
             })
@@ -2340,19 +2275,19 @@ export class Menu extends Phaser.Scene {
     constructor() {
         super("Menu");
     }
+
     create() {
         const { width } = this.scale;
-        try {
-            ensureMenuBackground(this);
-        } catch (e) {}
-        // Música de menú
+
+        try { ensureMenuBackground(this); } catch (e) {}
         ensureMenuMusic(this);
+
         this.selectedIndex = 0;
         this.buttons = [];
 
         this.updateTexts = () => {
             this.title.setText(
-                isEnglish ? "THE FURY OF THE ABYSS" : "LA FURIA DEL ABISMO",
+                isEnglish ? "THE FURY OF THE ABYSS" : "LA FURIA DEL ABISMO"
             );
             this.playText.setText(isEnglish ? "PLAY" : "JUGAR");
             this.langText.setText(isEnglish ? "LANGUAGE" : "IDIOMA");
@@ -2361,97 +2296,109 @@ export class Menu extends Phaser.Scene {
 
         this.cameras.main.setBackgroundColor(0x001d33);
 
-        try {
-            ensureMenuBackground(this);
-        } catch (e) {}
-        this.title = this.add
-            .text(
-                width / 2,
-                80,
-                isEnglish ? "THE FURY OF THE ABYSS" : "LA FURIA DEL ABISMO",
-                { font: "72px Arial", color: "#00e5ff" },
-            )
-            .setOrigin(0.5);
+        try { ensureMenuBackground(this); } catch (e) {}
 
-        const buttonWidth = 250,
-            buttonHeight = 70,
-            spacing = 40;
+        this.title = this.add.text(
+            width / 2,
+            80,
+            isEnglish ? "THE FURY OF THE ABYSS" : "LA FURIA DEL ABISMO",
+            {
+                font: "72px Arial",
+                color: "#ffd7a0"
+            }
+        ).setOrigin(0.5);
+
+        const buttonWidth = 280;
+        const buttonHeight = 72;
+        const spacing = 40;
         let startY = 250;
 
+        // Colores marrones
+        const mainBtnColor = 0x4b2e1f;
+        const secondBtnColor = 0x3b2418;
+        const thirdBtnColor = 0x2f1b12;
+
+        // PLAY
         const playButton = this.add
-            .rectangle(width / 2, startY, buttonWidth, buttonHeight, 0x004466)
+            .rectangle(width / 2, startY, buttonWidth, buttonHeight, mainBtnColor, 0.95)
             .setInteractive();
-        this.playText = this.add
-            .text(width / 2, startY, isEnglish ? "PLAY" : "JUGAR", {
-                font: "28px Arial",
-                color: "#00ffff",
-            })
-            .setOrigin(0.5);
+
+        playButton.setStrokeStyle(2, 0x8d6a44);
+
+        this.playText = this.add.text(width / 2, startY, isEnglish ? "PLAY" : "JUGAR", {
+            font: "28px Arial",
+            color: "#ffe6c7"
+        }).setOrigin(0.5);
+
         this.buttons.push({
             rect: playButton,
-            callback: () => this.cleanupAndStart("ModeSelector"),
+            callback: () => this.cleanupAndStart("ModeSelector")
         });
 
+        // LANGUAGE
         startY += buttonHeight + spacing;
+
         const langButton = this.add
-            .rectangle(width / 2, startY, buttonWidth, buttonHeight, 0x003355)
+            .rectangle(width / 2, startY, buttonWidth, buttonHeight, secondBtnColor, 0.95)
             .setInteractive();
-        this.langText = this.add
-            .text(width / 2, startY, isEnglish ? "LANGUAGE" : "IDIOMA", {
-                font: "28px Arial",
-                color: "#00ffcc",
-            })
-            .setOrigin(0.5);
+
+        langButton.setStrokeStyle(2, 0x7a5637);
+
+        this.langText = this.add.text(width / 2, startY, isEnglish ? "LANGUAGE" : "IDIOMA", {
+            font: "28px Arial",
+            color: "#ffe0b3"
+        }).setOrigin(0.5);
+
         this.buttons.push({
             rect: langButton,
             callback: () => {
                 isEnglish = !isEnglish;
                 this.updateTexts();
-            },
+            }
         });
 
+        // CONTROLS
         startY += buttonHeight + spacing;
+
         const controlsButton = this.add
-            .rectangle(width / 2, startY, buttonWidth, buttonHeight, 0x002244)
+            .rectangle(width / 2, startY, buttonWidth, buttonHeight, thirdBtnColor, 0.95)
             .setInteractive();
-        this.controlsText = this.add
-            .text(width / 2, startY, isEnglish ? "CONTROLS" : "CONTROLES", {
-                font: "28px Arial",
-                color: "#66ffff",
-            })
-            .setOrigin(0.5);
+
+        controlsButton.setStrokeStyle(2, 0x6b4a30);
+
+        this.controlsText = this.add.text(width / 2, startY, isEnglish ? "CONTROLS" : "CONTROLES", {
+            font: "28px Arial",
+            color: "#ffe6c7"
+        }).setOrigin(0.5);
+
         this.buttons.push({
             rect: controlsButton,
-            callback: () => this.cleanupAndStart("ControlsScene"),
+            callback: () => this.cleanupAndStart("ControlsScene")
         });
 
         // Marco selector
-        this.selector = this.add
-            .rectangle(
-                this.buttons[this.selectedIndex].rect.x,
-                this.buttons[this.selectedIndex].rect.y,
-                buttonWidth + 10,
-                buttonHeight + 10,
-            )
-            .setStrokeStyle(4, 0xffff00)
+        this.selector = this.add.rectangle(
+            this.buttons[this.selectedIndex].rect.x,
+            this.buttons[this.selectedIndex].rect.y,
+            buttonWidth + 14,
+            buttonHeight + 14
+        )
+            .setStrokeStyle(4, 0xffc36a)
             .setOrigin(0.5);
 
-        // Keyboard nav: W/S and Up/Down both move selection
-        this.pressedNavTime = 0;
+        // ---- TECLADO ----
         this.keyUp = this.input.keyboard.addKey("W");
         this.keyDown = this.input.keyboard.addKey("S");
         this.keyUp2 = this.input.keyboard.addKey("UP");
         this.keyDown2 = this.input.keyboard.addKey("DOWN");
 
-        // Confirm keys: player1 SPACE, player2 ENTER
         this.keyConfirmP1 = this.input.keyboard.addKey("SPACE");
         this.keyConfirmP2 = this.input.keyboard.addKey("ENTER");
 
-        // Back keys: SHIFT (P1) and BACKSPACE (P2) - here no action in main menu
         this.keyBackP1 = this.input.keyboard.addKey("SHIFT");
         this.keyBackP2 = this.input.keyboard.addKey("BACKSPACE");
 
-        // set up gamepad connect to init flags
+        // ---- GAMEPAD (igual que tu código original) ----
         this.input.gamepad.on("connected", (pad) => {
             pad._upPressed =
                 pad._downPressed =
@@ -2462,88 +2409,89 @@ export class Menu extends Phaser.Scene {
     }
 
     cleanupAndStart(sceneName, data) {
-        // Remover listeners de botones antes de cambiar escena
         if (this.buttons) {
             this.buttons.forEach((btn) => {
                 if (btn.rect && btn.rect.removeAllListeners) {
                     try {
                         btn.rect.removeAllListeners();
-                    } catch (e) {
-                        // Ignore
-                    }
+                    } catch (e) {}
                 }
             });
         }
+
         this.scene.start(sceneName, data);
     }
 
-    update(time) {
-        // keyboard navigation (debounced)
+    update() {
+
+        // ----- TECLADO -----
         if (
             Phaser.Input.Keyboard.JustDown(this.keyUp) ||
             Phaser.Input.Keyboard.JustDown(this.keyUp2)
-        )
+        ) {
             this.moveSelector(-1);
+        }
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyDown) ||
             Phaser.Input.Keyboard.JustDown(this.keyDown2)
-        )
+        ) {
             this.moveSelector(1);
+        }
 
-        // confirm with keyboard
         if (
             Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) ||
             Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)
         ) {
             const btn = this.buttons[this.selectedIndex];
             if (btn && btn.callback) {
-                // Si es el botón de idioma, ejecutar directamente (no cambia escena)
-                if (this.selectedIndex === 1) {
-                    btn.callback();
-                } else {
-                    // Para otros botones que cambian escena, usar cleanup
-                    btn.callback();
-                }
+                btn.callback();
             }
         }
 
-        // gamepad nav & confirm (works for all connected pads)
+        // ----- GAMEPAD (idéntico patrón al tuyo) -----
         const pads = this.input.gamepad.gamepads;
+
         pads.forEach((pad) => {
             if (!pad) return;
-            // vertical axis navigation
+
             const y = pad.axes.length > 1 ? pad.axes[1].getValue() : 0;
+
             if (y < -0.6 && !pad._upPressed) {
                 this.moveSelector(-1);
                 pad._upPressed = true;
-            } else if (y > 0.6 && !pad._downPressed) {
+            }
+            else if (y > 0.6 && !pad._downPressed) {
                 this.moveSelector(1);
                 pad._downPressed = true;
-            } else if (y > -0.6 && y < 0.6) {
+            }
+            else if (y > -0.6 && y < 0.6) {
                 pad._upPressed = pad._downPressed = false;
             }
 
-            // A to confirm
             const aPressed = pad.buttons[0] && pad.buttons[0].pressed;
+
             if (aPressed && !pad._aPressed) {
                 const btn = this.buttons[this.selectedIndex];
                 if (btn && btn.callback) btn.callback();
                 pad._aPressed = true;
             }
-            if (!aPressed) pad._aPressed = false;
 
-            // B/back does nothing in main menu
+            if (!aPressed) pad._aPressed = false;
         });
     }
 
     moveSelector(dir) {
         if (!this.buttons || this.buttons.length === 0) return;
+
         this.selectedIndex = Phaser.Math.Wrap(
             this.selectedIndex + dir,
             0,
-            this.buttons.length,
+            this.buttons.length
         );
+
         const button = this.buttons[this.selectedIndex];
+
         if (button && button.rect) {
             this.selector.x = button.rect.x;
             this.selector.y = button.rect.y;
@@ -2555,182 +2503,385 @@ export class ControlsScene extends Phaser.Scene {
     constructor() {
         super("ControlsScene");
     }
+
     create() {
+
         const { width, height } = this.scale;
-        // Música de menú
+
         ensureMenuMusic(this);
-        // Reset runtime flags so GameOver can be triggered repeatedly across matches
+
         this._gameOverCooldownUntil = 0;
-        // Ensure background offset resets to default for a fresh layout
         this._bgYOffset = 48;
-        if (this._bgOffsetText) {
-            try {
-                this._bgOffsetText.setText(`bg offset: ${this._bgYOffset}`);
-            } catch (e) {}
-        }
-        // If a leftover background image exists on this scene instance, destroy it to avoid duplicates
+
         if (this._bgImage && this._bgImage.scene) {
-            try {
-                this._bgImage.destroy();
-            } catch (e) {}
+            try { this._bgImage.destroy(); } catch (e) {}
             this._bgImage = null;
         }
+
         this.cameras.main.setBackgroundColor(0x001d33);
 
-        const title = this.add
-            .text(
-                40,
-                40,
-                isEnglish ? "CONTROLS (GAMEPAD)" : "CONTROLES (MANDO)",
-                { font: "36px Arial", color: "#00ffff" },
-            )
-            .setOrigin(0, 0);
+        // -------------------------
+        // Layout general
+        // -------------------------
 
-        let y = 100;
-        const leftX = 40;
-        const line = (txt) => {
-            this.add
-                .text(leftX, y, txt, {
+        const buttonsX = 60;
+        const buttonsStartY = 140;
+
+        const buttonWidth  = 320;
+        const buttonHeight = 64;
+
+        const panelX = buttonsX + buttonWidth + 40;
+        const panelY = buttonsStartY;
+
+        // mismos marrones que el menú principal
+        const buttonColor   = 0x4b2e1f;
+        const strokeColor   = 0x8d6a44;
+        const titleColor    = "#d8c19a";
+
+        // -------------------------
+        // Título
+        // -------------------------
+
+        const titleCenterX = buttonsX + buttonWidth / 2;
+
+        this.add.text(
+            titleCenterX,
+            60,
+            isEnglish ? "CONTROLS" : "CONTROLES",
+            {
+                font: "38px Arial",
+                color: titleColor
+            }
+        ).setOrigin(0.5, 0);
+
+        // -------------------------
+        // Sistema de paneles
+        // -------------------------
+
+        this.panels = {};
+
+        const createPanel = (title, lines) => {
+
+            const container = this.add.container(panelX, panelY);
+
+            let y = 0;
+
+            const t = this.add.text(0, y, title, {
+                font: "26px Arial",
+                color: titleColor
+            });
+
+            container.add(t);
+
+            y += 42;
+
+            lines.forEach(l => {
+
+                const txt = this.add.text(0, y, l, {
                     font: "22px Arial",
                     color: "#ffffff",
-                    align: "left",
-                })
-                .setOrigin(0, 0);
-            y += 32;
+                    wordWrap: { width: width - panelX - 40 }
+                });
+
+                container.add(txt);
+                y += txt.height + 10;
+            });
+
+            container.setVisible(false);
+            return container;
         };
 
-        // Gamepad-only controls (left aligned)
-        line(
-            isEnglish
-                ? "Move: Left stick (horizontal)"
-                : "Mover: palanca izquierda (horizontal)",
-        );
-        line(
-            isEnglish
-                ? "Jump: Push left stick UP"
-                : "Saltar: empujar palanca izquierda HACIA ARRIBA",
-        );
-        line(isEnglish ? "Punch: X button" : "Golpe: botón X");
-        line(isEnglish ? "Block/Charge: A button" : "Bloquear/Cargar: botón A");
-        line(isEnglish ? "Shoot: B button" : "Disparar: botón B");
-        y += 10;
+        // -------------------------
+        // Paneles
+        // -------------------------
 
-        // Special notes: Franchesca combos and all characters' abilities
-        line(
-            isEnglish
-                ? "Franchesca special (examples):"
-                : "Franchesca - instrucciones especiales:",
+        this.panels.basic = createPanel(
+            isEnglish ? "Basic controls" : "Controles básicos",
+            [
+                isEnglish ? "Move: left stick (horizontal)" : "Mover: palanca izquierda (horizontal)",
+                isEnglish ? "Jump: push left stick up"       : "Saltar: empujar palanca izquierda hacia arriba",
+                isEnglish ? "Punch: X button"               : "Golpe: botón X",
+                isEnglish ? "Block / charge: A button"      : "Bloquear / cargar: botón A",
+                isEnglish ? "Shoot: B button"               : "Disparar: botón B"
+            ]
         );
-        line(
-            isEnglish
-                ? "Right, Right + Punch = Steal"
-                : "Derecha, Derecha + Golpe = Robo (robar habilidad)",
-        );
-        line(
-            isEnglish
-                ? "Left, Left + Punch = Use stolen ability"
-                : "Izquierda, Izquierda + Golpe = Usar habilidad robada",
-        );
-        y += 8;
 
-        // Abilities for each character
-        line(isEnglish ? "Charles - Abilities:" : "Charles - Habilidades:");
-        line(
-            isEnglish
-                ? "1) Left, Right + Punch: Quick dash hit"
-                : "1) Izq, Der + Golpe: Embestida rápida",
-        );
-        line(
-            isEnglish
-                ? "2) Right, Left + Punch: Shield burst"
-                : "2) Der, Izq + Golpe: Explosión de escudo",
-        );
-        line(
-            isEnglish
-                ? "3) Right, Right + Punch: Ground slam"
-                : "3) Der, Der + Golpe: Golpe al suelo",
-        );
-        y += 6;
+        this.panels.modes = createPanel(
+            isEnglish ? "Game modes" : "Modos de juego",
+            [
+                isEnglish
+                    ? "Versus: both players will face each other in a direct battle. The winner will be the one who manages to reduce the opponent’s life to zero. Who will prove to be the strongest of the two?"
+                    : "Versus: ambos jugadores se enfrentarán entre sí en un combate directo. Ganará quien logre bajar la vida del rival hasta cero. ¿Quién demostrará ser el más fuerte de los dos?",
 
-        line(isEnglish ? "Sofia - Abilities:" : "Sofia - Habilidades:");
-        line(
-            isEnglish
-                ? "1) Left, Right + Punch: Swift shot"
-                : "1) Izq, Der + Golpe: Disparo veloz",
+                isEnglish
+                    ? "Cooperative: both players will merge into a single being and control the same body. One player will aim, shoot and deflect projectiles, while the other will move the body and attack enemies physically. The goal is to survive waves and defeat the final boss. Will you be able to achieve it together?"
+                    : "Cooperativo: los jugadores se fusionarán en un solo ser y controlarán un mismo cuerpo. Uno apuntará, disparará y desviará proyectiles, mientras el otro moverá el cuerpo y golpeará físicamente a los enemigos. El objetivo es superar oleadas hasta vencer al jefe final. ¿Serán capaces de lograrlo juntos?"
+            ]
         );
-        line(
-            isEnglish
-                ? "2) Right, Left + Punch: Energy bubble"
-                : "2) Der, Izq + Golpe: Burbuja energética",
-        );
-        line(
-            isEnglish
-                ? "3) Right, Right + Punch: Aerial flip"
-                : "3) Der, Der + Golpe: Voltereta aérea",
-        );
-        y += 6;
 
-        line(
-            isEnglish ? "Franchesca - Abilities:" : "Franchesca - Habilidades:",
+        this.panels.franchesca = createPanel(
+            "Franchesca",
+            [
+                isEnglish ? "Right, Right + Punch: steal ability" : "Der, Der + Golpe: robar habilidad",
+                isEnglish ? "Left, Left + Punch: use stolen ability" : "Izq, Izq + Golpe: usar habilidad robada",
+                isEnglish ? "Left, Right + Punch: steal minor item" : "Izq, Der + Golpe: robar ítem menor",
+                isEnglish ? "Right, Left + Punch: quick vanish" : "Der, Izq + Golpe: desvanecimiento rápido",
+                isEnglish ? "Right, Right + Punch: steal major ability" : "Der, Der + Golpe: robar habilidad mayor"
+            ]
         );
-        line(
-            isEnglish
-                ? "1) Left, Right + Punch: Steal minor item"
-                : "1) Izq, Der + Golpe: Robar ítem menor",
-        );
-        line(
-            isEnglish
-                ? "2) Right, Left + Punch: Quick vanish"
-                : "2) Der, Izq + Golpe: Desvanecimiento rápido",
-        );
-        line(
-            isEnglish
-                ? "3) Right, Right + Punch: Steal major ability"
-                : "3) Der, Der + Golpe: Robar habilidad mayor",
-        );
-        y += 6;
 
-        line(isEnglish ? "Mario - Abilities:" : "Mario - Habilidades:");
-        line(
-            isEnglish
-                ? "1) Left, Right + Punch: Fire dash"
-                : "1) Izq, Der + Golpe: Carrera de fuego",
+        this.panels.charles = createPanel(
+            "Charles",
+            [
+                isEnglish ? "Left, Right + Punch: quick dash hit" : "Izq, Der + Golpe: embestida rápida",
+                isEnglish ? "Right, Left + Punch: shield burst"   : "Der, Izq + Golpe: explosión de escudo",
+                isEnglish ? "Right, Right + Punch: ground slam"  : "Der, Der + Golpe: golpe al suelo"
+            ]
         );
-        line(
-            isEnglish
-                ? "2) Right, Left + Punch: Power throw"
-                : "2) Der, Izq + Golpe: Lanzamiento potente",
-        );
-        line(
-            isEnglish
-                ? "3) Right, Right + Punch: Spin upper"
-                : "3) Der, Der + Golpe: Giro ascendente",
-        );
-        y += 12;
 
-        // Botón para volver
-        const backBtn = this.add
-            .rectangle(width / 2, height - 70, 220, 60, 0x003355)
-            .setInteractive();
-        const backTxt = this.add
-            .text(width / 2, height - 70, isEnglish ? "BACK" : "VOLVER", {
-                font: "28px Arial",
-                color: "#00ffff",
-            })
-            .setOrigin(0.5);
-        backBtn.on("pointerdown", () => {
-            try {
-                this.scene.start("Menu");
-            } catch (e) {
-                console.warn("Failed to go back to Menu:", e);
-            }
+        this.panels.sofia = createPanel(
+            "Sofia",
+            [
+                isEnglish ? "Left, Right + Punch: swift shot" : "Izq, Der + Golpe: disparo veloz",
+                isEnglish ? "Right, Left + Punch: energy bubble" : "Der, Izq + Golpe: burbuja energética",
+                isEnglish ? "Right, Right + Punch: aerial flip" : "Der, Der + Golpe: voltereta aérea"
+            ]
+        );
+
+        this.panels.mario = createPanel(
+            "Mario",
+            [
+                isEnglish ? "Left, Right + Punch: fire dash" : "Izq, Der + Golpe: carrera de fuego",
+                isEnglish ? "Right, Left + Punch: power throw" : "Der, Izq + Golpe: lanzamiento potente",
+                isEnglish ? "Right, Right + Punch: spin upper" : "Der, Der + Golpe: giro ascendente"
+            ]
+        );
+
+        const showPanel = (key) => {
+            Object.values(this.panels).forEach(p => p.setVisible(false));
+            if (this.panels[key]) this.panels[key].setVisible(true);
+        };
+
+        // -------------------------
+        // Botones laterales
+        // -------------------------
+
+        const buttonsData = [
+            { key: "basic",      en: "Basic controls", es: "Controles básicos" },
+            { key: "modes",      en: "Game modes",    es: "Modos de juego" },
+            { key: "franchesca", en: "Franchesca",    es: "Franchesca" },
+            { key: "charles",    en: "Charles",       es: "Charles" },
+            { key: "sofia",      en: "Sofia",         es: "Sofia" },
+            { key: "mario",      en: "Mario",         es: "Mario" }
+        ];
+
+        this.buttons = [];
+        this.selectedIndex = 0;
+
+        let y = buttonsStartY;
+
+        buttonsData.forEach(b => {
+
+            const rect = this.add.rectangle(
+                buttonsX,
+                y,
+                buttonWidth,
+                buttonHeight,
+                buttonColor,
+                0.95
+            )
+            .setOrigin(0, 0.5)
+            .setInteractive({ useHandCursor: true })
+            .setStrokeStyle(2, strokeColor);
+
+            const label = this.add.text(
+                buttonsX + buttonWidth / 2,
+                y,
+                isEnglish ? b.en : b.es,
+                {
+                    font: "24px Arial",
+                    color: "#ffe6c7"
+                }
+            ).setOrigin(0.5);
+
+            rect.on("pointerdown", () => {
+                this.selectedIndex = this.buttons.findIndex(bt => bt.key === b.key);
+                this.updateSelector();
+                showPanel(b.key);
+            });
+
+            this.buttons.push({
+                rect,
+                key: b.key
+            });
+
+            y += buttonHeight + 14;
         });
 
-        // Tecla ESC para volver
-        this.input.keyboard.on("keydown-ESC", () => this.scene.start("Menu"));
-        // Enter o Space también vuelven
-        this.input.keyboard.on("keydown-ENTER", () => this.scene.start("Menu"));
-        this.input.keyboard.on("keydown-SPACE", () => this.scene.start("Menu"));
+        // selector
+        this.selector = this.add.rectangle(
+            buttonsX + buttonWidth / 2,
+            this.buttons[0].rect.y,
+            buttonWidth + 12,
+            buttonHeight + 12
+        )
+        .setStrokeStyle(4, 0xffc36a)
+        .setOrigin(0.5);
+
+        // mostrar panel inicial
+        showPanel("basic");
+
+        // -------------------------
+        // Botón volver
+        // -------------------------
+
+        const backBtn = this.add
+            .rectangle(width / 2, height - 70, 240, 60, buttonColor, 0.95)
+            .setInteractive({ useHandCursor: true })
+            .setStrokeStyle(2, strokeColor);
+
+        this.add.text(
+            width / 2,
+            height - 70,
+            isEnglish ? "BACK" : "VOLVER",
+            {
+                font: "28px Arial",
+                color: "#ffe6c7"
+            }
+        ).setOrigin(0.5);
+
+        backBtn.on("pointerdown", () => {
+            this.scene.start("Menu");
+        });
+
+        // -------------------------
+        // Teclado
+        // -------------------------
+
+        this.keyUp   = this.input.keyboard.addKey("W");
+        this.keyDown = this.input.keyboard.addKey("S");
+        this.keyUp2  = this.input.keyboard.addKey("UP");
+        this.keyDown2= this.input.keyboard.addKey("DOWN");
+
+        this.keyConfirm1 = this.input.keyboard.addKey("SPACE");
+        this.keyConfirm2 = this.input.keyboard.addKey("ENTER");
+
+        this.keyBack1 = this.input.keyboard.addKey("ESC");
+        this.keyBack2 = this.input.keyboard.addKey("BACKSPACE");
+
+        // -------------------------
+        // Gamepad (igual patrón que tu menú)
+        // -------------------------
+
+        this.input.gamepad.on("connected", (pad) => {
+            pad._upPressed =
+            pad._downPressed =
+            pad._aPressed =
+            pad._bPressed = false;
+        });
+    }
+
+    update() {
+
+        // ---- teclado ----
+
+        if (
+            Phaser.Input.Keyboard.JustDown(this.keyUp) ||
+            Phaser.Input.Keyboard.JustDown(this.keyUp2)
+        ) {
+            this.moveSelector(-1);
+        }
+
+        if (
+            Phaser.Input.Keyboard.JustDown(this.keyDown) ||
+            Phaser.Input.Keyboard.JustDown(this.keyDown2)
+        ) {
+            this.moveSelector(1);
+        }
+
+        if (
+            Phaser.Input.Keyboard.JustDown(this.keyConfirm1) ||
+            Phaser.Input.Keyboard.JustDown(this.keyConfirm2)
+        ) {
+            const btn = this.buttons[this.selectedIndex];
+            if (btn) this.showSelectedPanel();
+        }
+
+        if (
+            Phaser.Input.Keyboard.JustDown(this.keyBack1) ||
+            Phaser.Input.Keyboard.JustDown(this.keyBack2)
+        ) {
+            this.scene.start("Menu");
+        }
+
+        // ---- gamepad ----
+
+        const pads = this.input.gamepad.gamepads;
+
+        pads.forEach(pad => {
+            if (!pad) return;
+
+            const y = pad.axes.length > 1 ? pad.axes[1].getValue() : 0;
+
+            if (y < -0.6 && !pad._upPressed) {
+                this.moveSelector(-1);
+                pad._upPressed = true;
+            }
+            else if (y > 0.6 && !pad._downPressed) {
+                this.moveSelector(1);
+                pad._downPressed = true;
+            }
+            else if (y > -0.6 && y < 0.6) {
+                pad._upPressed = pad._downPressed = false;
+            }
+
+            const aPressed = pad.buttons[0] && pad.buttons[0].pressed;
+
+            if (aPressed && !pad._aPressed) {
+                this.showSelectedPanel();
+                pad._aPressed = true;
+            }
+            if (!aPressed) pad._aPressed = false;
+
+            const bPressed = pad.buttons[1] && pad.buttons[1].pressed;
+
+            if (bPressed && !pad._bPressed) {
+                this.scene.start("Menu");
+                pad._bPressed = true;
+            }
+            if (!bPressed) pad._bPressed = false;
+        });
+    }
+
+    moveSelector(dir) {
+
+        if (!this.buttons.length) return;
+
+        this.selectedIndex = Phaser.Math.Wrap(
+            this.selectedIndex + dir,
+            0,
+            this.buttons.length
+        );
+
+        this.updateSelector();
+        this.showSelectedPanel();
+    }
+
+    updateSelector() {
+
+        const btn = this.buttons[this.selectedIndex];
+
+        this.selector.x = btn.rect.x + btn.rect.width / 2;
+        this.selector.y = btn.rect.y;
+    }
+
+    showSelectedPanel() {
+
+        const btn = this.buttons[this.selectedIndex];
+        if (!btn) return;
+
+        Object.values(this.panels).forEach(p => p.setVisible(false));
+        if (this.panels[btn.key]) this.panels[btn.key].setVisible(true);
     }
 }
 
@@ -2739,148 +2890,237 @@ export class ModeSelector extends Phaser.Scene {
     constructor() {
         super("ModeSelector");
     }
+
     create() {
-        // Música de menú
+
         ensureMenuMusic(this);
+
         try {
             ensureMenuBackground(this);
         } catch (e) {}
+
         const { width, height } = this.scale;
+
         this.selectedIndex = 0;
         this.buttons = [];
 
         this.cameras.main.setBackgroundColor(0x001933);
-        const buttonSize = 200,
-            spacing = 100;
-        const centerX = width / 2,
-            centerY = height / 2;
 
-        const versusButton = this.add
-            .rectangle(
-                centerX - buttonSize / 2 - spacing / 2,
-                centerY,
-                buttonSize,
-                buttonSize,
-                0x004466,
-            )
-            .setInteractive();
-        const coopButton = this.add
-            .rectangle(
-                centerX + buttonSize / 2 + spacing / 2,
-                centerY,
-                buttonSize,
-                buttonSize,
-                0x003366,
-            )
-            .setInteractive();
+        // -------------------------
+        // Estilo (igual al resto)
+        // -------------------------
 
-        const t1 = this.add
-            .text(versusButton.x, versusButton.y, "VERSUS", {
-                font: "28px Arial",
-                color: "#00ffff",
-            })
-            .setOrigin(0.5);
-        const t2 = this.add
-            .text(coopButton.x, coopButton.y, "CO-OP", {
-                font: "28px Arial",
-                color: "#66ffff",
-            })
-            .setOrigin(0.5);
+        const buttonSize = 260; // más grandes
+        const spacing = 140;
+
+        const buttonColor = 0x4b2e1f;
+        const strokeColor = 0x8d6a44;
+        const textColor   = "#ffe6c7";
+
+        const centerX = width / 2;
+        const centerY = height / 2 + 40;
+
+        // -------------------------
+        // Título
+        // -------------------------
+
+        this.add.text(
+            width / 2,
+            70,
+            isEnglish ? "SELECT MODE" : "SELECCIONAR MODO",
+            {
+                font: "48px Arial",
+                color: "#d8c19a"
+            }
+        ).setOrigin(0.5);
+
+        // -------------------------
+        // Botones
+        // -------------------------
+
+        const versusX = centerX - buttonSize / 2 - spacing / 2;
+        const coopX   = centerX + buttonSize / 2 + spacing / 2;
+
+        const versusButton = this.add.rectangle(
+            versusX,
+            centerY,
+            buttonSize,
+            buttonSize,
+            buttonColor,
+            0.95
+        )
+        .setInteractive({ useHandCursor: true })
+        .setStrokeStyle(3, strokeColor);
+
+        const coopButton = this.add.rectangle(
+            coopX,
+            centerY,
+            buttonSize,
+            buttonSize,
+            buttonColor,
+            0.95
+        )
+        .setInteractive({ useHandCursor: true })
+        .setStrokeStyle(3, strokeColor);
+
+        // sombra suave
+        const vsShadow = this.add.rectangle(
+            versusX + 6,
+            centerY + 6,
+            buttonSize,
+            buttonSize,
+            0x000000,
+            0.25
+        ).setDepth(-1);
+
+        const coShadow = this.add.rectangle(
+            coopX + 6,
+            centerY + 6,
+            buttonSize,
+            buttonSize,
+            0x000000,
+            0.25
+        ).setDepth(-1);
+
+        const t1 = this.add.text(
+            versusButton.x,
+            versusButton.y,
+            "VERSUS",
+            {
+                font: "36px Arial",
+                color: textColor
+            }
+        ).setOrigin(0.5);
+
+        const t2 = this.add.text(
+            coopButton.x,
+            coopButton.y,
+            "CO-OP",
+            {
+                font: "36px Arial",
+                color: textColor
+            }
+        ).setOrigin(0.5);
+
+        // -------------------------
+        // Botones lógicos
+        // -------------------------
 
         this.buttons.push({
             rect: versusButton,
-            callback: () =>
-                this.scene.start("CharacterSelector", { mode: "versus" }),
+            mode: "versus",
+            callback: () => this.cleanupAndStart(
+                "CharacterSelector",
+                { mode: "versus" }
+            )
         });
+
         this.buttons.push({
             rect: coopButton,
-            callback: () =>
-                this.scene.start("CharacterSelector", { mode: "cooperativo" }),
+            mode: "cooperativo",
+            callback: () => this.cleanupAndStart(
+                "CharacterSelector",
+                { mode: "cooperativo" }
+            )
         });
 
-        this.selector = this.add
-            .rectangle(
-                this.buttons[this.selectedIndex].rect.x,
-                this.buttons[this.selectedIndex].rect.y,
-                buttonSize + 10,
-                buttonSize + 10,
-            )
-            .setStrokeStyle(4, 0xffff00)
-            .setOrigin(0.5);
+        // -------------------------
+        // Selector
+        // -------------------------
 
-        // keyboard nav
-        this.keyLeft = this.input.keyboard.addKey("A");
+        this.selector = this.add.rectangle(
+            this.buttons[this.selectedIndex].rect.x,
+            this.buttons[this.selectedIndex].rect.y,
+            buttonSize + 16,
+            buttonSize + 16
+        )
+        .setStrokeStyle(5, 0xffc36a)
+        .setOrigin(0.5);
+
+        // -------------------------
+        // Input teclado
+        // -------------------------
+
+        this.keyLeft  = this.input.keyboard.addKey("A");
         this.keyRight = this.input.keyboard.addKey("D");
-        this.keyLeft2 = this.input.keyboard.addKey("LEFT");
+        this.keyLeft2  = this.input.keyboard.addKey("LEFT");
         this.keyRight2 = this.input.keyboard.addKey("RIGHT");
 
-        // confirm/back
-        this.keyConfirmP1 = this.input.keyboard.addKey("SPACE"); // player1
-        this.keyConfirmP2 = this.input.keyboard.addKey("ENTER"); // player2
+        this.keyConfirmP1 = this.input.keyboard.addKey("SPACE");
+        this.keyConfirmP2 = this.input.keyboard.addKey("ENTER");
+
         this.keyBackP1 = this.input.keyboard.addKey("SHIFT");
         this.keyBackP2 = this.input.keyboard.addKey("BACKSPACE");
 
+        // -------------------------
+        // Gamepad flags
+        // -------------------------
+
         this.input.gamepad.on("connected", (pad) => {
-            pad._leftPressed = pad._rightPressed = false;
-            pad._aPressed = pad._bPressed = false;
+            pad._leftPressed  =
+            pad._rightPressed =
+            pad._aPressed     =
+            pad._bPressed     = false;
         });
 
+        // -------------------------
+        // Mouse
+        // -------------------------
+
         versusButton.once("pointerdown", () => {
-            try {
-                this.cleanupAndStart("CharacterSelector", { mode: "versus" });
-            } catch (e) {
-                console.warn("Failed to start CharacterSelector (versus):", e);
-            }
+            this.cleanupAndStart(
+                "CharacterSelector",
+                { mode: "versus" }
+            );
         });
+
         coopButton.once("pointerdown", () => {
-            try {
-                this.cleanupAndStart("CharacterSelector", {
-                    mode: "cooperativo",
-                });
-            } catch (e) {
-                console.warn(
-                    "Failed to start CharacterSelector (cooperativo):",
-                    e,
-                );
-            }
+            this.cleanupAndStart(
+                "CharacterSelector",
+                { mode: "cooperativo" }
+            );
         });
     }
 
     cleanupAndStart(sceneName, data) {
-        // Remover listeners de botones antes de cambiar escena
+
         this.buttons.forEach((btn) => {
             if (btn.rect && btn.rect.removeAllListeners) {
-                btn.rect.removeAllListeners();
+                try { btn.rect.removeAllListeners(); } catch(e){}
             }
         });
+
         this.scene.start(sceneName, data);
     }
 
     update() {
+
+        // -------------------------
+        // Teclado
+        // -------------------------
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyLeft) ||
             Phaser.Input.Keyboard.JustDown(this.keyLeft2)
-        )
+        ) {
             this.moveSelector(-1);
+        }
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyRight) ||
             Phaser.Input.Keyboard.JustDown(this.keyRight2)
-        )
+        ) {
             this.moveSelector(1);
+        }
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) ||
             Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)
         ) {
-            const btn = this.buttons && this.buttons[this.selectedIndex];
-            if (btn && typeof btn.callback === "function") {
-                this.cleanupAndStart(
-                    "CharacterSelector",
-                    btn.callback === this.buttons[0].callback
-                        ? { mode: "versus" }
-                        : { mode: "cooperativo" },
-                );
-            }
+            const btn = this.buttons[this.selectedIndex];
+            if (btn && btn.callback) btn.callback();
         }
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyBackP1) ||
             Phaser.Input.Keyboard.JustDown(this.keyBackP2)
@@ -2892,43 +3132,50 @@ export class ModeSelector extends Phaser.Scene {
             this.scene.start("Menu");
         }
 
+        // -------------------------
+        // Gamepad (igual patrón que usás)
+        // -------------------------
+
         const pads = this.input.gamepad.gamepads;
+
         pads.forEach((pad) => {
+
             if (!pad) return;
+
             const x = pad.axes.length > 0 ? pad.axes[0].getValue() : 0;
+
             if (x < -0.6 && !pad._leftPressed) {
                 this.moveSelector(-1);
                 pad._leftPressed = true;
-            } else if (x > 0.6 && !pad._rightPressed) {
+            }
+            else if (x > 0.6 && !pad._rightPressed) {
                 this.moveSelector(1);
                 pad._rightPressed = true;
-            } else if (x > -0.6 && x < 0.6) {
+            }
+            else if (x > -0.6 && x < 0.6) {
                 pad._leftPressed = pad._rightPressed = false;
             }
 
-            // A confirm
+            // A confirmar
             const a = pad.buttons[0] && pad.buttons[0].pressed;
             if (a && !pad._aPressed) {
-                const btn = this.buttons && this.buttons[this.selectedIndex];
-                if (btn && typeof btn.callback === "function") {
-                    this.cleanupAndStart(
-                        "CharacterSelector",
-                        btn.callback === this.buttons[0].callback
-                            ? { mode: "versus" }
-                            : { mode: "cooperativo" },
-                    );
-                    pad._aPressed = true;
-                }
+
+                const btn = this.buttons[this.selectedIndex];
+                if (btn && btn.callback) btn.callback();
+
+                pad._aPressed = true;
             }
             if (!a) pad._aPressed = false;
 
-            // B back
+            // B volver
             const b = pad.buttons[1] && pad.buttons[1].pressed;
             if (b && !pad._bPressed) {
+
                 this.buttons.forEach((btn) => {
                     if (btn.rect && btn.rect.removeAllListeners)
                         btn.rect.removeAllListeners();
                 });
+
                 this.scene.start("Menu");
                 pad._bPressed = true;
             }
@@ -2937,13 +3184,17 @@ export class ModeSelector extends Phaser.Scene {
     }
 
     moveSelector(dir) {
+
         if (!this.buttons || this.buttons.length === 0) return;
+
         this.selectedIndex = Phaser.Math.Wrap(
             this.selectedIndex + dir,
             0,
-            this.buttons.length,
+            this.buttons.length
         );
+
         const b = this.buttons[this.selectedIndex];
+
         if (b && b.rect) {
             this.selector.x = b.rect.x;
             this.selector.y = b.rect.y;
@@ -2956,24 +3207,21 @@ export class CharacterSelector extends Phaser.Scene {
     constructor() {
         super("CharacterSelector");
     }
+
     init(data) {
         this.selectedMode = data.mode || "versus";
     }
 
     create() {
-        // Música de menú
         ensureMenuMusic(this);
+
         const { width, height } = this.scale;
-        // Ensure we are not in fullscreen mode when showing the GameOver UI.
-        // Some browsers/platforms keep the canvas scaled and that causes the map to be mispositioned when
-        // restarting while still in fullscreen. Force exit fullscreen here using Phaser and a document fallback.
+
         try {
             if (this.scale && this.scale.isFullscreen)
                 this.scale.stopFullscreen();
-        } catch (e) {
-            /* ignore */
-        }
-        // Fallback: try the DOM fullscreen API (some browsers don't properly toggle via Phaser)
+        } catch (e) {}
+
         try {
             const doc = window.document;
             if (
@@ -2987,140 +3235,137 @@ export class CharacterSelector extends Phaser.Scene {
                 else if (doc.mozCancelFullScreen) doc.mozCancelFullScreen();
                 else if (doc.msExitFullscreen) doc.msExitFullscreen();
             }
-        } catch (e) {
-            /* ignore */
-        }
+        } catch (e) {}
+
         this.cameras.main.setBackgroundColor(0x001d33);
 
+        // Colores
+        this.cardBaseColor = 0x3b3f46;   // gris azulado, destaca sobre fondo azul
+        this.p1Color = 0xffd400;        // marco P1
+        this.p2Color = 0xff7a00;        // marco P2
+        this.p1Bg = 0x6b5b2e;           // fondo cuando P1 apunta
+        this.p2Bg = 0x5a3b1f;           // fondo cuando P2 apunta
+
         this.characters = [
-            { name: "Charles", color: 0x006699 },
-            { name: "Sofia", color: 0x0099cc },
-            { name: "Franchesca", color: 0x660066 },
-            { name: "Mario", color: 0x33cccc },
+            { name: "Charles" },
+            { name: "Sofia" },
+            { name: "Franchesca" },
+            { name: "Mario" },
         ];
 
-        // selections default: player1 left, player2 right
         this.playerSelections = [
             { index: 0 },
             { index: this.characters.length - 1 },
         ];
-        this.characterRects = [];
 
-        const rectWidth = 200,
-            rectHeight = 300,
-            spacing = 40;
+        this.characterCards = [];
+
+        const rectWidth = 220;
+        const rectHeight = 320;
+        const spacing = 40;
+
         const totalWidth =
             this.characters.length * rectWidth +
             (this.characters.length - 1) * spacing;
+
         let startX = (width - totalWidth) / 2 + rectWidth / 2;
         const centerY = height / 2;
 
         this.characters.forEach((char, i) => {
-            const box = this.add
-                .rectangle(startX, centerY, rectWidth, rectHeight, char.color)
-                .setStrokeStyle(2, 0x000000)
-                .setInteractive();
+
+            const box = this.add.rectangle(
+                startX,
+                centerY,
+                rectWidth,
+                rectHeight,
+                this.cardBaseColor
+            ).setStrokeStyle(2, 0x000000);
+
             const spriteKey = `char${i}_idle`;
-            // add character preview sprite (centered a bit above)
+
             let preview = null;
+
             if (this.textures.exists(spriteKey)) {
                 preview = this.add.sprite(startX, centerY - 20, spriteKey);
-                // force display size to 64x64 for preview thumbnails
-                preview.setDisplaySize(64, 64);
-                // if the texture has multiple frames, show only the first frame for preview
-                if (this.anims.exists(spriteKey)) {
-                    try {
-                        preview.setFrame(0);
-                    } catch (e) {
-                        /* ignore if frame setting fails */
-                    }
-                }
+                preview.setDisplaySize(140, 140);   // MUCHO más grande
             } else {
-                preview = this.add
-                    .rectangle(
-                        startX,
-                        centerY - 20,
-                        rectWidth - 40,
-                        rectHeight - 120,
-                        char.color,
-                    )
-                    .setStrokeStyle(1, 0x000000);
+                preview = this.add.rectangle(
+                    startX,
+                    centerY - 20,
+                    140,
+                    140,
+                    0x777777
+                );
             }
-            this.add
-                .text(startX, centerY + rectHeight / 2 + 25, char.name, {
+
+            const nameText = this.add.text(
+                startX,
+                centerY + rectHeight / 2 - 30,
+                char.name,
+                {
                     font: "22px Arial",
-                    color: "#00ffff",
-                })
-                .setOrigin(0.5);
-            // click assigns to player1 by default and unconfirms player1 (so they must confirm again)
-            box.on("pointerdown", (ptr) => {
-                this.playerSelections[0].index = i;
-                this.unconfirmSelection(0);
-                this.updateSelectors();
+                    color: "#ffffff",
+                }
+            ).setOrigin(0.5);
+
+            // Ocultos por defecto
+            preview.setAlpha(0);
+            nameText.setAlpha(0);
+
+            this.characterCards.push({
+                box,
+                preview,
+                nameText
             });
-            this.characterRects.push(box);
-            // store preview sprite so we can follow selection
-            box.preview = preview;
+
             startX += rectWidth + spacing;
         });
 
-        // Player frames (player1: yellow, player2: orange)
+        // Marcos de selección
         this.playerSelectors = [
-            this.add
-                .rectangle(
-                    this.characterRects[this.playerSelections[0].index].x,
-                    centerY,
-                    rectWidth + 12,
-                    rectHeight + 12,
-                )
-                .setStrokeStyle(4, 0xffff00)
-                .setOrigin(0.5),
-            this.add
-                .rectangle(
-                    this.characterRects[this.playerSelections[1].index].x,
-                    centerY,
-                    rectWidth + 12,
-                    rectHeight + 12,
-                )
-                .setStrokeStyle(4, 0xffaa00)
-                .setOrigin(0.5),
+            this.add.rectangle(
+                this.characterCards[this.playerSelections[0].index].box.x,
+                centerY,
+                rectWidth + 14,
+                rectHeight + 14
+            ).setStrokeStyle(4, this.p1Color),
+
+            this.add.rectangle(
+                this.characterCards[this.playerSelections[1].index].box.x,
+                centerY,
+                rectWidth + 14,
+                rectHeight + 14
+            ).setStrokeStyle(4, this.p2Color)
         ];
 
-        // confirmed flags (both must be true to advance)
         this.confirmed = [false, false];
 
-        // Keyboard controls for selection:
-        // Player1 uses A/D and SPACE to confirm
+        // Teclado
         this.keyLeftP1 = this.input.keyboard.addKey("A");
         this.keyRightP1 = this.input.keyboard.addKey("D");
         this.keyConfirmP1 = this.input.keyboard.addKey("SPACE");
 
-        // Player2 uses LEFT/RIGHT and ENTER to confirm
         this.keyLeftP2 = this.input.keyboard.addKey("LEFT");
         this.keyRightP2 = this.input.keyboard.addKey("RIGHT");
         this.keyConfirmP2 = this.input.keyboard.addKey("ENTER");
 
-        // Back keys
         this.keyBackP1 = this.input.keyboard.addKey("SHIFT");
         this.keyBackP2 = this.input.keyboard.addKey("BACKSPACE");
 
-        // Gamepad flags
         this.input.gamepad.on("connected", (pad) => {
             pad._leftPressed = pad._rightPressed = false;
             pad._aPressed = pad._bPressed = false;
         });
 
-        // Update selectors initial
         this.updateSelectors();
     }
 
-    // helper: confirm/unconfirm visuals and logic
     confirmSelection(idx) {
         this.confirmed[idx] = true;
-        // set stroke to green when confirmed
+
         if (this.playerSelectors[idx])
             this.playerSelectors[idx].setStrokeStyle(4, 0x00ff00);
-        // advance only if both confirmed
+
         if (this.confirmed[0] && this.confirmed[1]) {
             this.scene.start("MapSelector", {
                 player1: this.playerSelections[0].index,
@@ -3129,102 +3374,84 @@ export class CharacterSelector extends Phaser.Scene {
             });
         }
     }
+
     unconfirmSelection(idx) {
         this.confirmed[idx] = false;
-        // restore original color
+
         if (this.playerSelectors[idx]) {
-            const color = idx === 0 ? 0xffff00 : 0xffaa00;
-            this.playerSelectors[idx].setStrokeStyle(4, color);
+            const c = idx === 0 ? this.p1Color : this.p2Color;
+            this.playerSelectors[idx].setStrokeStyle(4, c);
         }
     }
 
     update() {
-        // Gamepad navigation for two controllers (index 0 and 1)
+
         const pads = this.input.gamepad.gamepads;
 
-        // Player1 keyboard nav
         if (Phaser.Input.Keyboard.JustDown(this.keyLeftP1)) {
-            this.playerSelections[0].index = Phaser.Math.Wrap(
-                this.playerSelections[0].index - 1,
-                0,
-                this.characterRects.length,
-            );
+            this.playerSelections[0].index =
+                Phaser.Math.Wrap(this.playerSelections[0].index - 1, 0, this.characterCards.length);
             this.unconfirmSelection(0);
             this.updateSelectors();
         }
+
         if (Phaser.Input.Keyboard.JustDown(this.keyRightP1)) {
-            this.playerSelections[0].index = Phaser.Math.Wrap(
-                this.playerSelections[0].index + 1,
-                0,
-                this.characterRects.length,
-            );
+            this.playerSelections[0].index =
+                Phaser.Math.Wrap(this.playerSelections[0].index + 1, 0, this.characterCards.length);
             this.unconfirmSelection(0);
             this.updateSelectors();
         }
-        // Player2 keyboard nav
+
         if (Phaser.Input.Keyboard.JustDown(this.keyLeftP2)) {
-            this.playerSelections[1].index = Phaser.Math.Wrap(
-                this.playerSelections[1].index - 1,
-                0,
-                this.characterRects.length,
-            );
-            this.unconfirmSelection(1);
-            this.updateSelectors();
-        }
-        if (Phaser.Input.Keyboard.JustDown(this.keyRightP2)) {
-            this.playerSelections[1].index = Phaser.Math.Wrap(
-                this.playerSelections[1].index + 1,
-                0,
-                this.characterRects.length,
-            );
+            this.playerSelections[1].index =
+                Phaser.Math.Wrap(this.playerSelections[1].index - 1, 0, this.characterCards.length);
             this.unconfirmSelection(1);
             this.updateSelectors();
         }
 
-        // Confirm with keyboard: mark respective player as confirmed; only start when both confirmed
+        if (Phaser.Input.Keyboard.JustDown(this.keyRightP2)) {
+            this.playerSelections[1].index =
+                Phaser.Math.Wrap(this.playerSelections[1].index + 1, 0, this.characterCards.length);
+            this.unconfirmSelection(1);
+            this.updateSelectors();
+        }
+
         if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP1))
             this.confirmSelection(0);
+
         if (Phaser.Input.Keyboard.JustDown(this.keyConfirmP2))
             this.confirmSelection(1);
 
-        // Back: unconfirm or go back to ModeSelector if both unconfirmed
         if (Phaser.Input.Keyboard.JustDown(this.keyBackP1)) {
             if (this.confirmed[0]) this.unconfirmSelection(0);
             else this.scene.start("ModeSelector");
         }
+
         if (Phaser.Input.Keyboard.JustDown(this.keyBackP2)) {
             if (this.confirmed[1]) this.unconfirmSelection(1);
             else this.scene.start("ModeSelector");
         }
 
-        // Pads navigation (each pad controls its respective player selection)
         pads.forEach((pad, i) => {
             if (!pad) return;
-            const x = pad.axes.length > 0 ? pad.axes[0].getValue() : 0;
+
             const sel = this.playerSelections[i] || this.playerSelections[0];
+            const x = pad.axes.length > 0 ? pad.axes[0].getValue() : 0;
 
             if (x < -0.55 && !pad._leftPressed) {
-                sel.index = Phaser.Math.Wrap(
-                    sel.index - 1,
-                    0,
-                    this.characterRects.length,
-                );
+                sel.index = Phaser.Math.Wrap(sel.index - 1, 0, this.characterCards.length);
                 pad._leftPressed = true;
                 this.unconfirmSelection(i);
                 this.updateSelectors();
             } else if (x > 0.55 && !pad._rightPressed) {
-                sel.index = Phaser.Math.Wrap(
-                    sel.index + 1,
-                    0,
-                    this.characterRects.length,
-                );
+                sel.index = Phaser.Math.Wrap(sel.index + 1, 0, this.characterCards.length);
                 pad._rightPressed = true;
                 this.unconfirmSelection(i);
                 this.updateSelectors();
-            } else if (x > -0.55 && x < 0.55)
+            } else if (x > -0.55 && x < 0.55) {
                 pad._leftPressed = pad._rightPressed = false;
+            }
 
-            // A confirm
             const a = pad.buttons[0] && pad.buttons[0].pressed;
             if (a && !pad._aPressed) {
                 this.confirmSelection(i);
@@ -3232,7 +3459,6 @@ export class CharacterSelector extends Phaser.Scene {
             }
             if (!a) pad._aPressed = false;
 
-            // B back
             const b = pad.buttons[1] && pad.buttons[1].pressed;
             if (b && !pad._bPressed) {
                 if (this.confirmed[i]) this.unconfirmSelection(i);
@@ -3243,39 +3469,33 @@ export class CharacterSelector extends Phaser.Scene {
         });
     }
 
-    moveSelector(dir) {
-        if (!this.buttons || this.buttons.length === 0) return;
-        this.selectedIndex = Phaser.Math.Wrap(
-            this.selectedIndex + dir,
-            0,
-            this.buttons.length,
-        );
-        const b = this.buttons[this.selectedIndex];
-        if (b && b.rect) {
-            this.selector.x = b.rect.x;
-            this.selector.y = b.rect.y;
-        }
-    }
-
-    // Agrega este método dentro de la clase CharacterSelector
     updateSelectors() {
-        // Asegura que los marcos de selección sigan a los personajes seleccionados
-        if (this.playerSelectors && this.characterRects) {
-            if (
-                this.playerSelectors[0] &&
-                this.characterRects[this.playerSelections[0].index]
-            ) {
-                this.playerSelectors[0].x =
-                    this.characterRects[this.playerSelections[0].index].x;
+
+        const p1Index = this.playerSelections[0].index;
+        const p2Index = this.playerSelections[1].index;
+
+        this.playerSelectors[0].x = this.characterCards[p1Index].box.x;
+        this.playerSelectors[1].x = this.characterCards[p2Index].box.x;
+
+        this.characterCards.forEach((card, i) => {
+
+            let active = false;
+
+            if (i === p1Index) {
+                card.box.fillColor = this.p1Bg;
+                active = true;
             }
-            if (
-                this.playerSelectors[1] &&
-                this.characterRects[this.playerSelections[1].index]
-            ) {
-                this.playerSelectors[1].x =
-                    this.characterRects[this.playerSelections[1].index].x;
+            else if (i === p2Index) {
+                card.box.fillColor = this.p2Bg;
+                active = true;
             }
-        }
+            else {
+                card.box.fillColor = this.cardBaseColor;
+            }
+
+            card.preview.setAlpha(active ? 1 : 0);
+            card.nameText.setAlpha(active ? 1 : 0);
+        });
     }
 }
 
@@ -3284,6 +3504,7 @@ export class MapSelector extends Phaser.Scene {
     constructor() {
         super("MapSelector");
     }
+
     init(data) {
         this.player1Index = data.player1;
         this.player2Index = data.player2;
@@ -3294,52 +3515,110 @@ export class MapSelector extends Phaser.Scene {
 
     create() {
         const { width, height } = this.scale;
+
         this.cameras.main.setBackgroundColor(0x001933);
+
         try {
             ensureMenuBackground(this);
         } catch (e) {}
+
+        // ---------- colores marrón (gamma menú) ----------
+        const titleColor   = "#d8c19a";
+        const textColor    = "#f5e6cf";
+        const frameColor   = 0xd8b98a;
+        const panelColor   = 0x1f2a24; // fondo neutro que no choca con sprites
+        const arrowColor   = "#d8c19a";
+
+        // --------- CARGA DEL PREVIEW ----------
+        this.load.image("map_preview_0", "public/mapas/mapaprov.png");
+        this.load.start();
+
+        // -------------------------------------
+
         this.title = this.add
             .text(
                 width / 2,
-                80,
+                70,
                 isEnglish ? "Select a Map" : "Selecciona un Mapa",
-                { font: "48px Arial", color: "#00ffff" },
+                { font: "48px Arial", color: titleColor }
             )
             .setOrigin(0.5);
+
+        // Panel del preview
+        this.previewPanel = this.add
+            .rectangle(width / 2, height / 2 - 40, 520, 300, panelColor)
+            .setStrokeStyle(3, frameColor)
+            .setOrigin(0.5);
+
+        this.mapPreview = null;
+
+        this.load.once("complete", () => {
+            if (this.textures.exists("map_preview_0")) {
+                this.mapPreview = this.add.image(
+                    width / 2,
+                    height / 2 - 40,
+                    "map_preview_0"
+                );
+
+                const maxW = 480;
+                const maxH = 260;
+
+                const scale = Math.min(
+                    maxW / this.mapPreview.width,
+                    maxH / this.mapPreview.height
+                );
+
+                this.mapPreview.setScale(scale);
+            }
+        });
+
         this.mapText = this.add
-            .text(width / 2, height / 2, this.maps[this.currentMap], {
-                font: "36px Arial",
-                color: "#66ffff",
+            .text(width / 2, height / 2 + 140, this.maps[this.currentMap], {
+                font: "34px Arial",
+                color: textColor
             })
             .setOrigin(0.5);
 
+        // Flechas
         this.prev = this.add
-            .text(width / 2 - 200, height / 2, "<", {
-                font: "64px Arial",
-                color: "#00ffff",
+            .text(width / 2 - 320, height / 2 - 40, "<", {
+                font: "72px Arial",
+                color: arrowColor
             })
-            .setInteractive();
-        this.next = this.add
-            .text(width / 2 + 200, height / 2, ">", {
-                font: "64px Arial",
-                color: "#00ffff",
-            })
+            .setOrigin(0.5)
             .setInteractive();
 
-        this.startButton = this.add
-            .rectangle(width / 2, height / 2 + 150, 200, 70, 0x004466)
+        this.next = this.add
+            .text(width / 2 + 320, height / 2 - 40, ">", {
+                font: "72px Arial",
+                color: arrowColor
+            })
+            .setOrigin(0.5)
             .setInteractive();
+
+        // -------- BOTÓN START (mismo estilo marrón) --------
+        this.startButton = this.add
+            .rectangle(width / 2, height / 2 + 210, 300, 80, 0x6b4a2b)
+            .setStrokeStyle(3, frameColor)
+            .setInteractive();
+
         this.startText = this.add
             .text(
                 width / 2,
-                height / 2 + 150,
+                height / 2 + 210,
                 isEnglish ? "START" : "EMPEZAR",
-                { font: "28px Arial", color: "#00ffff" },
+                {
+                    font: "32px Arial",
+                    color: textColor
+                }
             )
             .setOrigin(0.5);
 
+        // -----------------------------------------
+
         this.prev.on("pointerdown", () => this.changeMap(-1));
         this.next.on("pointerdown", () => this.changeMap(1));
+
         this.startButton.on("pointerdown", () => {
             try {
                 this.startGame();
@@ -3348,7 +3627,7 @@ export class MapSelector extends Phaser.Scene {
             }
         });
 
-        // keyboard nav and confirm/back
+        // keyboard nav
         this.keyLeft = this.input.keyboard.addKey("A");
         this.keyRight = this.input.keyboard.addKey("D");
         this.keyLeft2 = this.input.keyboard.addKey("LEFT");
@@ -3358,6 +3637,12 @@ export class MapSelector extends Phaser.Scene {
         this.keyConfirmP2 = this.input.keyboard.addKey("ENTER");
         this.keyBackP1 = this.input.keyboard.addKey("SHIFT");
         this.keyBackP2 = this.input.keyboard.addKey("BACKSPACE");
+
+        // Gamepad flags
+        this.input.gamepad.on("connected", (pad) => {
+            pad._leftPressed = pad._rightPressed = false;
+            pad._aPressed = pad._bPressed = false;
+        });
     }
 
     update() {
@@ -3366,34 +3651,45 @@ export class MapSelector extends Phaser.Scene {
             Phaser.Input.Keyboard.JustDown(this.keyLeft2)
         )
             this.changeMap(-1);
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyRight) ||
             Phaser.Input.Keyboard.JustDown(this.keyRight2)
         )
             this.changeMap(1);
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) ||
             Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)
         )
             this.startGame();
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyBackP1) ||
             Phaser.Input.Keyboard.JustDown(this.keyBackP2)
         )
-            this.scene.start("CharacterSelector", { mode: this.selectedMode });
+            this.scene.start("CharacterSelector", {
+                player1: this.player1Index,
+                player2: this.player2Index,
+                mode: this.selectedMode
+            });
 
         const pads = this.input.gamepad.gamepads;
+
         pads.forEach((pad) => {
             if (!pad) return;
+
             const x = pad.axes.length > 0 ? pad.axes[0].getValue() : 0;
+
             if (x < -0.6 && !pad._leftPressed) {
                 this.changeMap(-1);
                 pad._leftPressed = true;
             } else if (x > 0.6 && !pad._rightPressed) {
                 this.changeMap(1);
                 pad._rightPressed = true;
-            } else if (x > -0.6 && x < 0.6)
+            } else if (x > -0.6 && x < 0.6) {
                 pad._leftPressed = pad._rightPressed = false;
+            }
 
             const a = pad.buttons[0] && pad.buttons[0].pressed;
             if (a && !pad._aPressed) {
@@ -3405,7 +3701,9 @@ export class MapSelector extends Phaser.Scene {
             const b = pad.buttons[1] && pad.buttons[1].pressed;
             if (b && !pad._bPressed) {
                 this.scene.start("CharacterSelector", {
-                    mode: this.selectedMode,
+                    player1: this.player1Index,
+                    player2: this.player2Index,
+                    mode: this.selectedMode
                 });
                 pad._bPressed = true;
             }
@@ -3417,9 +3715,11 @@ export class MapSelector extends Phaser.Scene {
         this.currentMap = Phaser.Math.Wrap(
             this.currentMap + dir,
             0,
-            this.maps.length,
+            this.maps.length
         );
+
         this.mapText.setText(this.maps[this.currentMap]);
+        // Por ahora siempre se muestra el preview del mapa 1
     }
 
     startGame() {
@@ -3427,7 +3727,7 @@ export class MapSelector extends Phaser.Scene {
             player1Index: this.player1Index,
             player2Index: this.player2Index,
             mode: this.selectedMode,
-            map: this.maps[this.currentMap],
+            map: this.maps[this.currentMap]
         });
     }
 }
@@ -9239,46 +9539,60 @@ export class GameOver extends Phaser.Scene {
         this.mode = data.mode || "versus";
     }
     create() {
-        // No música de menú en Game Over
         stopMenuMusic(this);
         stopBattleMusic(this);
+
         const { width, height } = this.scale;
         this.cameras.main.setBackgroundColor(0x001d33);
 
-        // Si es modo cooperativo, mostrar "PERDIERON" sin jugador específico
+        // ───── Paleta marrón (para todo el menú) ─────
+        const TITLE_COLOR = "#e6c49a";      // marrón claro / arena
+        const SUBTITLE_COLOR = "#f5e6d3";   // casi blanco cálido
+
+        const BTN_LEFT = 0x6b3f1d;          // marrón oscuro
+        const BTN_MID  = 0x7a4a24;
+        const BTN_RIGHT= 0x5a3317;
+
+        const BTN_TEXT = "#f5e6d3";
+
+        const SELECTOR_COLOR = 0xd9b27c;    // borde marrón claro
+        const SELECTOR_LINE = 4;
+
+        // ────────────────────────────────────────────
+
         if (this.mode === "cooperativo") {
             this.add
                 .text(width / 2, 120, "FIN DEL JUEGO", {
                     font: "64px Arial",
-                    color: "#ff4444",
+                    color: TITLE_COLOR
                 })
                 .setOrigin(0.5);
+
             this.add
                 .text(width / 2, 200, "¡PERDIERON!", {
                     font: "36px Arial",
-                    color: "#ffffff",
+                    color: SUBTITLE_COLOR
                 })
                 .setOrigin(0.5);
+
         } else {
-            // Modo versus: mostrar el ganador
+
             const winnerName =
                 this.winnerIndex === 0
-                    ? ["Charles", "Sofia", "Franchesca", "Mario"][
-                          this.player1Index
-                      ] || "Player 1"
-                    : ["Charles", "Sofia", "Franchesca", "Mario"][
-                          this.player2Index
-                      ] || "Player 2";
+                    ? ["Charles", "Sofia", "Franchesca", "Mario"][this.player1Index] || "Player 1"
+                    : ["Charles", "Sofia", "Franchesca", "Mario"][this.player2Index] || "Player 2";
+
             this.add
                 .text(width / 2, 120, "FIN DEL JUEGO", {
                     font: "64px Arial",
-                    color: "#ff4444",
+                    color: TITLE_COLOR
                 })
                 .setOrigin(0.5);
+
             this.add
                 .text(width / 2, 200, `${winnerName} ganó!`, {
                     font: "36px Arial",
-                    color: "#ffffff",
+                    color: SUBTITLE_COLOR
                 })
                 .setOrigin(0.5);
         }
@@ -9287,34 +9601,32 @@ export class GameOver extends Phaser.Scene {
         const buttonW = 260,
             buttonH = 64,
             spacing = 30;
+
         const bx = width / 2;
         let by = height - 160;
 
         this.buttons = [];
 
         const restartBtn = this.add
-            .rectangle(bx - (buttonW + spacing), by, buttonW, buttonH, 0x004466)
+            .rectangle(bx - (buttonW + spacing), by, buttonW, buttonH, BTN_LEFT)
             .setInteractive();
+
         const restartTxt = this.add
             .text(
                 restartBtn.x,
                 restartBtn.y,
                 isEnglish ? "RESTART" : "REINICIAR",
-                { font: "24px Arial", color: "#00ffff" },
+                { font: "24px Arial", color: BTN_TEXT }
             )
             .setOrigin(0.5);
+
         this.buttons.push({
             rect: restartBtn,
             txt: restartTxt,
             callback: () => {
-                // Reiniciar: detener escenas y reiniciar GameScene
-                try {
-                    this.scene.stop("HudScene");
-                } catch (e) {}
-                try {
-                    this.scene.stop("GameScene");
-                } catch (e) {}
-                // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
+                try { this.scene.stop("HudScene"); } catch (e) {}
+                try { this.scene.stop("GameScene"); } catch (e) {}
+
                 this.scene.start("GameScene", {
                     player1Index: this.player1Index,
                     player2Index: this.player2Index,
@@ -9325,67 +9637,62 @@ export class GameOver extends Phaser.Scene {
         });
 
         const charSelBtn = this.add
-            .rectangle(bx, by, buttonW, buttonH, 0x003355)
+            .rectangle(bx, by, buttonW, buttonH, BTN_MID)
             .setInteractive();
+
         const charSelTxt = this.add
             .text(
                 charSelBtn.x,
                 charSelBtn.y,
                 isEnglish ? "CHAR SELECT" : "SELECCIONAR PERSONAJE",
-                { font: "18px Arial", color: "#00ffff" },
+                { font: "18px Arial", color: BTN_TEXT }
             )
             .setOrigin(0.5);
+
         this.buttons.push({
             rect: charSelBtn,
             txt: charSelTxt,
             callback: () => {
-                // Ir a selector de personaje: detener GameScene/HudScene primero
-                try {
-                    this.scene.stop("HudScene");
-                } catch (e) {}
-                try {
-                    this.scene.stop("GameScene");
-                } catch (e) {}
-                // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
+                try { this.scene.stop("HudScene"); } catch (e) {}
+                try { this.scene.stop("GameScene"); } catch (e) {}
+
                 this.scene.start("CharacterSelector", { mode: this.mode });
             },
         });
 
         const menuBtn = this.add
-            .rectangle(bx + (buttonW + spacing), by, buttonW, buttonH, 0x002244)
+            .rectangle(bx + (buttonW + spacing), by, buttonW, buttonH, BTN_RIGHT)
             .setInteractive();
+
         const menuTxt = this.add
             .text(menuBtn.x, menuBtn.y, isEnglish ? "MENU" : "MENU", {
                 font: "24px Arial",
-                color: "#00ffff",
+                color: BTN_TEXT,
             })
             .setOrigin(0.5);
+
         this.buttons.push({
             rect: menuBtn,
             txt: menuTxt,
             callback: () => {
-                // Volver al menú: detener escenas primero
-                try {
-                    this.scene.stop("HudScene");
-                } catch (e) {}
-                try {
-                    this.scene.stop("GameScene");
-                } catch (e) {}
-                // Evitar eliminar texturas aquí — pueden estar en uso por otras escenas.
+                try { this.scene.stop("HudScene"); } catch (e) {}
+                try { this.scene.stop("GameScene"); } catch (e) {}
+
                 this.scene.start("Menu");
             },
         });
 
-        // Selector visual
+        // Selector visual (marco marrón)
         this.selector = this.add
             .rectangle(
                 this.buttons[0].rect.x,
                 this.buttons[0].rect.y,
                 buttonW + 12,
-                buttonH + 12,
+                buttonH + 12
             )
-            .setStrokeStyle(4, 0xffff00)
+            .setStrokeStyle(SELECTOR_LINE, SELECTOR_COLOR)
             .setOrigin(0.5);
+
         this.selectedIndex = 0;
 
         // Input keys
@@ -9416,17 +9723,20 @@ export class GameOver extends Phaser.Scene {
             });
         });
     }
+
     update() {
         if (
             Phaser.Input.Keyboard.JustDown(this.keyLeft) ||
             Phaser.Input.Keyboard.JustDown(this.keyLeft2)
         )
             this.moveSelector(-1);
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyRight) ||
             Phaser.Input.Keyboard.JustDown(this.keyRight2)
         )
             this.moveSelector(1);
+
         if (
             Phaser.Input.Keyboard.JustDown(this.keyConfirmP1) ||
             Phaser.Input.Keyboard.JustDown(this.keyConfirmP2)
@@ -9434,9 +9744,12 @@ export class GameOver extends Phaser.Scene {
             this.selectCurrent();
 
         const pads = this.input.gamepad.gamepads;
+
         pads.forEach((pad) => {
             if (!pad) return;
+
             const x = pad.axes.length > 0 ? pad.axes[0].getValue() : 0;
+
             if (x < -0.6 && !pad._leftPressed) {
                 this.moveSelector(-1);
                 pad._leftPressed = true;
@@ -9448,6 +9761,7 @@ export class GameOver extends Phaser.Scene {
             }
 
             const a = pad.buttons[0] && pad.buttons[0].pressed;
+
             if (a && !pad._aPressed) {
                 this.selectCurrent();
                 pad._aPressed = true;
@@ -9455,18 +9769,22 @@ export class GameOver extends Phaser.Scene {
             if (!a) pad._aPressed = false;
         });
     }
+
     moveSelector(dir) {
         this.selectedIndex = Phaser.Math.Wrap(
             this.selectedIndex + dir,
             0,
-            this.buttons.length,
+            this.buttons.length
         );
+
         const b = this.buttons[this.selectedIndex].rect;
+
         if (b) {
             this.selector.x = b.x;
             this.selector.y = b.y;
         }
     }
+
     selectCurrent() {
         if (this.buttons && this.buttons[this.selectedIndex])
             this.buttons[this.selectedIndex].callback();
