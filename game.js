@@ -3919,49 +3919,49 @@ export class GameScene extends Phaser.Scene {
         if (mapName === "Mapa 1") {
             // Create a slight slope by splitting the ground into two segments with different Y
 
-            // Left ground - bajado más
+            // Left ground - bajado
             this._platformData.push({
                 x: Math.round(width * 0.2),
-                y: Math.round(height * 1.1),
+                y: Math.round(height * 0.97),
                 w: Math.round(width * 0.56),
                 h: 40,
             });
-            // Right ground - bajado más
+            // Right ground - bajado
             this._platformData.push({
                 x: Math.round(width * 0.72),
-                y: Math.round(height * 1.1),
+                y: Math.round(height * 0.99),
                 w: Math.round(width * 0.56),
                 h: 40,
             });
 
-            // Platforms near the left player - bajadas considerablemente
-            // left-most near player - bajada más
+            // Platforms near the left player
+            // left-most near player
             this._platformData.push({
                 x: Math.round(width * 0.12),
-                y: Math.round(height * 0.88),
+                y: Math.round(height * 0.77),
                 w: 160,
                 h: 24,
             });
-            // platform above player - bajada más
+            // platform above player
             this._platformData.push({
                 x: Math.round(width * 0.32),
-                y: Math.round(height * 0.68),
+                y: Math.round(height * 0.60),
                 w: 160,
                 h: 24,
             });
 
-            // Middle platform - bajada más
+            // Middle platform
             this._platformData.push({
                 x: Math.round(width * 0.58),
-                y: Math.round(height * 1.07),
+                y: Math.round(height * 0.92),
                 w: 580,
                 h: 90,
             });
 
-            // Small platform between players - bajada más
+            // Small platform between players
             this._platformData.push({
                 x: Math.round(width * 0.56),
-                y: Math.round(height * 0.71),
+                y: Math.round(height * 0.62),
                 w: 120,
                 h: 24,
             });
@@ -4459,7 +4459,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         const spawnY =
-            this.selectedMap === "Mapa 1" ? height - 20 : height - 40;
+            this.selectedMap === "Mapa 1" ? height * 0.85 : height - 40;
         const p1Sprite = this.physics.add
             .sprite(200, spawnY, p1KeyBase)
             .setCollideWorldBounds(true);
