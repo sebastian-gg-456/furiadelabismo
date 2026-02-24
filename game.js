@@ -3910,19 +3910,22 @@ export class GameScene extends Phaser.Scene {
         this._platformData.length = 0; // clear
 
         if (mapName === "Mapa 1") {
+            // Apply a small downward offset for Mapa 1 to match the 'mapaprov' artwork
+            const yOffset = Math.round(height * 0.04); // 4% of screen height
+
             // Create a slight slope by splitting the ground into two segments with different Y
 
             // Left ground - bajado
             this._platformData.push({
                 x: Math.round(width * 0.2),
-                y: Math.round(height * 0.97),
+                y: Math.round(height * 0.97) + yOffset,
                 w: Math.round(width * 0.56),
                 h: 40,
             });
             // Right ground - bajado
             this._platformData.push({
                 x: Math.round(width * 0.72),
-                y: Math.round(height * 0.99),
+                y: Math.round(height * 0.99) + yOffset,
                 w: Math.round(width * 0.56),
                 h: 40,
             });
@@ -3931,14 +3934,14 @@ export class GameScene extends Phaser.Scene {
             // left-most near player
             this._platformData.push({
                 x: Math.round(width * 0.12),
-                y: Math.round(height * 0.77),
+                y: Math.round(height * 0.77) + yOffset,
                 w: 160,
                 h: 24,
             });
             // platform above player
             this._platformData.push({
                 x: Math.round(width * 0.32),
-                y: Math.round(height * 0.60),
+                y: Math.round(height * 0.60) + yOffset,
                 w: 160,
                 h: 24,
             });
@@ -3946,7 +3949,7 @@ export class GameScene extends Phaser.Scene {
             // Middle platform
             this._platformData.push({
                 x: Math.round(width * 0.58),
-                y: Math.round(height * 0.92),
+                y: Math.round(height * 0.92) + yOffset,
                 w: 580,
                 h: 90,
             });
@@ -3954,7 +3957,7 @@ export class GameScene extends Phaser.Scene {
             // Small platform between players
             this._platformData.push({
                 x: Math.round(width * 0.56),
-                y: Math.round(height * 0.62),
+                y: Math.round(height * 0.62) + yOffset,
                 w: 120,
                 h: 24,
             });

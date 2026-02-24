@@ -120,55 +120,58 @@ class GameScene extends Phaser.Scene {
                             const realW = (imgW && imgW > 0) ? imgW : (source ? source.width : null);
                             const realH = (imgH && imgH > 0) ? imgH : (source ? source.height : null);
 
-                            if (realW && realH) {
-                                const scale = Math.max(width / realW, height / realH); // cover
-                                bg.setScale(scale);
-                                // bottom-center origin so the bottom of the image matches the bottom of the viewport
-                                bg.setOrigin(0.5, 1);
-                                bg.x = width / 2;
-                                bg.y = height + (this._bgYOffset || 0); // bottom aligned with offset
-                            } else {
-                                // fallback: fill the viewport (may stretch)
-                                bg.setDisplaySize(width, height);
-                                bg.setOrigin(0.5, 0.5);
-                                bg.x = width / 2; bg.y = height / 2 + (this._bgYOffset || 0);
-                            }
-                        } catch (e) {
-                            // final fallback: stretch to fit
-                            try { bg.setDisplaySize(width, height); bg.setOrigin(0.5, 0.5); bg.x = width / 2; bg.y = height / 2; } catch (ee) { /* ignore */ }
-                        }
-                        bg.setScrollFactor(0).setDepth(-10);
-                        return true;
-                    };
+                            if (mapName === "Mapa 1") {
+                                // Lower platforms for Mapa 1 by a small offset so art (mapaprov) lines up better
+                                const _downOffset = Math.round(height * 0.04); // 4% lower
 
-                    // If texture already exists (preloaded), add immediately
-                    if (!addBgIfReady('map1')) {
-                        // Try to load map1 at runtime. We'll attempt relative path first, then absolute on one retry.
-                        this._map1InGameRetry = false;
-                        // once the file finishes loading, add the background
-                        this.load.once('filecomplete-image-map1', () => { addBgIfReady('map1'); }, this);
-                        // handle load errors: retry once with absolute path
-                        this.load.once('loaderror', (file) => {
-                            try {
-                                if (file && file.key === 'map1' && !this._map1InGameRetry) {
-                                    this._map1InGameRetry = true;
-                                    this.load.image('map1', '/mapas/mapaprov.png');
-                                    // ensure we add when this second attempt completes
-                                    this.load.once('filecomplete-image-map1', () => { addBgIfReady('map1'); }, this);
-                                    this.load.start();
-                                }
-                            } catch (e) { /* ignore */ }
-                        }, this);
-                        // start the loader for the first attempt
-                        this.load.image('map1', 'mapas/mapaprov.png');
-                        this.load.start();
-                    }
-                }
+                                // Create a slight slope by splitting the ground into two segments with different Y
 
-                // Debug controls: allow nudging background vertically with [ and ] keys
-                // show current offset on screen
-                this.input.keyboard.on('keydown-OPEN_BRACKET', () => {
-                    this._bgYOffset = (this._bgYOffset || 0) - 8;
+                                // Left ground - bajado
+                                this._platformData.push({
+                                    x: Math.round(width * 0.2),
+                                    y: Math.round(height * 0.97) + _downOffset,
+                                    w: Math.round(width * 0.56),
+                                    h: 40,
+                                });
+                                // Right ground - bajado
+                                this._platformData.push({
+                                    x: Math.round(width * 0.72),
+                                    y: Math.round(height * 0.99) + _downOffset,
+                                    w: Math.round(width * 0.56),
+                                    h: 40,
+                                });
+
+                                // Platforms near the left player
+                                // left-most near player
+                                this._platformData.push({
+                                    x: Math.round(width * 0.12),
+                                    y: Math.round(height * 0.77) + _downOffset,
+                                    w: 160,
+                                    h: 24,
+                                });
+                                // platform above player
+                                this._platformData.push({
+                                    x: Math.round(width * 0.32),
+                                    y: Math.round(height * 0.60) + _downOffset,
+                                    w: 160,
+                                    h: 24,
+                                });
+
+                                // Middle platform
+                                this._platformData.push({
+                                    x: Math.round(width * 0.58),
+                                    y: Math.round(height * 0.92) + _downOffset,
+                                    w: 580,
+                                    h: 90,
+                                });
+
+                                // Small platform between players
+                                this._platformData.push({
+                                    x: Math.round(width * 0.56),
+                                    y: Math.round(height * 0.62) + _downOffset,
+                                    w: 120,
+                                    h: 24,
+                                });
                     if (this._bgImage) this._bgImage.y = this._bgImage.y - 8;
                     if (this._bgOffsetText) this._bgOffsetText.setText(`bg offset: ${this._bgYOffset}`);
                 });
