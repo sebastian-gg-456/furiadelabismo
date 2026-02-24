@@ -35,25 +35,28 @@ class GameScene extends Phaser.Scene {
                     // Create a slight slope by splitting the ground into two segments with different Y
 
                     // Left ground (a bit higher) - nudged slightly down for better fit
-                    this._platformData.push({ x: Math.round(width * 0.20), y: Math.round(height * 0.890), w: Math.round(width * 0.56), h: 40 });
-                    // Right ground (a bit lower) to create inclination (keep as-is)
-                    this._platformData.push({ x: Math.round(width * 0.72), y: Math.round(height * 0.92), w: Math.round(width * 0.56), h: 40 });
+                    // apply a small downward offset (2% of height) to lower platforms slightly
+                    const _downOffset = Math.round(height * 0.04);
+                    this._platformData.push({ x: Math.round(width * 0.20), y: Math.round(height * 0.890) + _downOffset, w: Math.round(width * 0.56), h: 40 });
+                    // Right ground (a bit lower) to create inclination
+                    this._platformData.push({ x: Math.round(width * 0.72), y: Math.round(height * 0.92) + _downOffset, w: Math.round(width * 0.56), h: 40 });
 
                     // Platforms near the left player: slight adjustments
                     // left-most near player (a bit lower than before)
-                    this._platformData.push({ x: Math.round(width * 0.15), y: Math.round(height * 0.65), w: 160, h: 24 });
+                    this._platformData.push({ x: Math.round(width * 0.15), y: Math.round(height * 0.65) + _downOffset, w: 160, h: 24 });
                     // platform above player: it was too high, move it down a bit (closer to ground)
-                    this._platformData.push({ x: Math.round(width * 0.32), y: Math.round(height * 0.48), w: 160, h: 24 });
+                    this._platformData.push({ x: Math.round(width * 0.32), y: Math.round(height * 0.48) + _downOffset, w: 160, h: 24 });
 
                     // Middle platform: move a bit to the left and keep it short
-                    this._platformData.push({ x: Math.round(width * 0.58), y: Math.round(height * 0.850), w: 580, h: 90 });
 
                     // New small platform between the two players: higher than the red one but below the top flying platforms
-                    this._platformData.push({ x: Math.round(width * 0.56), y: Math.round(height * 0.50), w: 120, h: 24 });
+                    this._platformData.push({ x: Math.round(width * 0.58), y: Math.round(height * 0.850) + _downOffset, w: 580, h: 90 });
+
+                    this._platformData.push({ x: Math.round(width * 0.56), y: Math.round(height * 0.50) + _downOffset, w: 120, h: 24 });
 
                     // Note: removed the far-right platform and the boat internal platform as requested
                 } else {
-                    this._platformData.push({ x: Math.round(width / 2), y: Math.round(height - 30), w: Math.round(width), h: 40 });
+                    this._platformData.push({ x: Math.round(width / 2), y: Math.round(height - 30) + Math.round(height * 0.04), w: Math.round(width), h: 40 });
                 }
 
                 // Build the actual game objects from the data

@@ -6,6 +6,8 @@
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
     <!-- Single module entrypoint; it will import game.js -->
     <script type="module" src="/src/main.js"></script>
+    <!-- Google Identity Services: the Client ID is injected from Vite env (VITE_GOOGLE_CLIENT_ID) in development/build -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
         body { margin: 0; }
@@ -14,5 +16,7 @@
 </head>
 <body>
     <div id="phaser-example"></div>
+    <!-- Contenedor global para el botón de Google Sign-In (posicionado por JS) -->
+    <div id="google-signin-button" style="position:absolute; z-index:100; pointer-events:auto;"></div>
 </body>
 </html>

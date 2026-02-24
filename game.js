@@ -4,6 +4,7 @@
 // ========================
 
 // Gestión de sesiones con localStorage
+import { getTranslations, getPhrase } from './src/services/translations.js';
 const SessionManager = {
     // Obtener todas las sesiones guardadas
     getAllSessions() {
@@ -372,73 +373,58 @@ export class LoginScene extends Phaser.Scene {
             })
             .setOrigin(0.5);
 
-        this.add
-            .text(width / 2, 260, "Ingresa tu nombre de usuario:", {
-                font: "16px Arial",
-                fill: "#ffffff",
-            })
-            .setOrigin(0.5);
+        // Intentar iniciar sesión con Google (si está configurado). Si no, mostrar mensaje de error.
+        const clientId = window.GOOGLE_CLIENT_ID && window.GOOGLE_CLIENT_ID !== 'REPLACE_WITH_CLIENT_ID' ? window.GOOGLE_CLIENT_ID : null;
 
-        // Campo de nombre de usuario
-        const userInput = document.createElement("input");
-        userInput.type = "text";
-        userInput.placeholder = "Nombre de usuario";
-        userInput.style.cssText = `
-            position: absolute;
-            left: ${width / 2 - 100}px;
-            top: 310px;
-            width: 200px;
-            padding: 10px;
-            font-size: 16px;
-            background: #1a1a2e;
-            color: #00ff00;
-            border: 2px solid #00ff00;
-            border-radius: 5px;
-            z-index: 100;
-        `;
-        document.body.appendChild(userInput);
-        userInput.focus();
+        // Reutilizar el contenedor global si existe (from index.html) para evitar duplicados
+        let googleContainer = document.getElementById('google-signin-button');
+        if (!googleContainer) {
+            googleContainer = document.createElement('div');
+            googleContainer.id = 'google-signin-button';
+            document.body.appendChild(googleContainer);
+        }
+        googleContainer.style.cssText = `position:absolute; left: ${width / 2 - 110}px; top: 300px; width: 220px; z-index: 100; text-align:center;`;
 
-        // Botón para crear sesión
-        const startButton = this.add
-            .text(width / 2, height - 120, "COMENZAR JUEGO", {
-                font: "bold 20px Arial",
-                fill: "#ffffff",
-                backgroundColor: "#00ff00",
-                padding: { x: 40, y: 15 },
-            })
-            .setOrigin(0.5)
-            .setInteractive()
-            .on("pointerover", function () {
-                this.setFill("#000000");
-            })
-            .on("pointerout", function () {
-                this.setFill("#ffffff");
-            })
-            .on("pointerdown", () => {
-                const username =
-                    userInput.value.trim() ||
-                    "Jugador" + Math.floor(Math.random() * 10000);
+        if (clientId && window.google && google.accounts && google.accounts.id) {
+            try {
+                google.accounts.id.initialize({
+                    client_id: clientId,
+                    callback: (resp) => {
+                        try {
+                            const credential = resp && resp.credential;
+                            if (!credential) throw new Error('No credential');
+                            const payload = JSON.parse(atob(credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+                            const username = payload.name || payload.email || ('Jugador' + Math.floor(Math.random() * 10000));
+                            const session = SessionManager.createSession(username);
+                            currentPlayer = session;
+                            // limpiar
+                            if (googleContainer && googleContainer.parentNode) googleContainer.parentNode.removeChild(googleContainer);
+                            // avanzar a Preloader
+                            this.scene.start('Preloader');
+                        } catch (e) {
+                            console.warn('Google sign-in parsing failed', e);
+                        }
+                    }
+                });
+                google.accounts.id.renderButton(googleContainer, { theme: 'outline', size: 'large' });
+                try { google.accounts.id.prompt(); } catch (e) {}
+                this.add.text(width / 2, 240, 'Inicia sesión con tu cuenta de Google', { font: '18px Arial', fill: '#ffffff' }).setOrigin(0.5);
+            } catch (e) {
+                console.warn('Google Identity init failed', e);
+            }
+        } else {
+            // Requerimos inicio de sesión solo con Google. Si no está configurado, informar al usuario.
+            if (googleContainer && googleContainer.parentNode) googleContainer.parentNode.removeChild(googleContainer);
 
-                // Crear la sesión con valores por defecto
-                const session = SessionManager.createSession(username);
-                currentPlayer = session;
+            this.add.text(width / 2, 220, 'Google Sign-In requerido', { font: 'bold 22px Arial', fill: '#ff4444' }).setOrigin(0.5);
+            const originText = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'TU_ORIGEN_AQUI';
+            this.add.text(width / 2, 280, 'GOOGLE_CLIENT_ID no está configurado o la librería no está disponible.', { font: '16px Arial', fill: '#ffffff', align: 'center', wordWrap: { width: 540 } }).setOrigin(0.5);
+            this.add.text(width / 2, 320, `Autoriza este origen en Google Cloud Console: ${originText}`, { font: '14px Arial', fill: '#00ffcc', align: 'center', wordWrap: { width: 540 } }).setOrigin(0.5);
 
-                // Limpiar input
-                if (userInput.parentNode) {
-                    userInput.parentNode.removeChild(userInput);
-                }
+            const retry = this.add.text(width / 2, 360, 'Reintentar', { font: 'bold 18px Arial', fill: '#ffffff', backgroundColor: '#0066ff', padding: { x: 20, y: 10 } }).setOrigin(0.5).setInteractive().on('pointerdown', () => { try { location.reload(); } catch (e) { window.location.href = window.location.href; } });
 
-                this.scene.start("Preloader");
-            });
-
-        // Instrucciones
-        this.add
-            .text(width / 2, 30, "Escribe tu nombre y presiona COMENZAR JUEGO", {
-                font: "12px Arial",
-                fill: "#00ffff",
-            })
-            .setOrigin(0.5);
+            this.add.text(width / 2, 420, 'Configura GOOGLE_CLIENT_ID en `index.html` o en las variables de entorno de Vercel y autoriza el origen en Google Cloud Console.', { font: '12px Arial', fill: '#00ffff', align: 'center', wordWrap: { width: 540 } }).setOrigin(0.5);
+        }
     }
 }
 
@@ -2286,12 +2272,11 @@ export class Menu extends Phaser.Scene {
         this.buttons = [];
 
         this.updateTexts = () => {
-            this.title.setText(
-                isEnglish ? "THE FURY OF THE ABYSS" : "LA FURIA DEL ABISMO"
-            );
-            this.playText.setText(isEnglish ? "PLAY" : "JUGAR");
-            this.langText.setText(isEnglish ? "LANGUAGE" : "IDIOMA");
-            this.controlsText.setText(isEnglish ? "CONTROLS" : "CONTROLES");
+            // Use getPhrase to resolve translations from TraduciLa (keys are expected in Spanish)
+            this.title.setText(getPhrase('La Furia del Abismo'));
+            this.playText.setText(getPhrase('Jugar'));
+            this.langText.setText(getPhrase('Idioma'));
+            this.controlsText.setText(getPhrase('Controles'));
         };
 
         this.cameras.main.setBackgroundColor(0x001d33);
@@ -2353,7 +2338,15 @@ export class Menu extends Phaser.Scene {
             rect: langButton,
             callback: () => {
                 isEnglish = !isEnglish;
-                this.updateTexts();
+                const lang = isEnglish ? 'en' : 'es';
+                // Fetch translations when switching language; update texts when ready
+                try {
+                    getTranslations(lang, () => {
+                        this.updateTexts();
+                    });
+                } catch (e) {
+                    this.updateTexts();
+                }
             }
         });
 
