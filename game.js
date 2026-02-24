@@ -3911,7 +3911,7 @@ export class GameScene extends Phaser.Scene {
 
         if (mapName === "Mapa 1") {
             // Apply a small downward offset for Mapa 1 to match the 'mapaprov' artwork
-            const yOffset = Math.round(height * 0.04); // 4% of screen height
+            const yOffset = Math.round(height * 0.02); // 2% of screen height (reduced per request)
 
             // Create a slight slope by splitting the ground into two segments with different Y
 
