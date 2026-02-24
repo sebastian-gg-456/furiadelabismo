@@ -3912,20 +3912,21 @@ export class GameScene extends Phaser.Scene {
         if (mapName === "Mapa 1") {
             // Apply a small downward offset for Mapa 1 to match the 'mapaprov' artwork
             const yOffset = Math.round(height * 0.04); // 4% of screen height (moved further down per request)
+            const extraYOffset = Math.round(height * 0.05); // additional 5% for the lower three platforms
 
             // Create a slight slope by splitting the ground into two segments with different Y
 
-            // Left ground - bajado
+            // Left ground - bajado (apply extra offset)
             this._platformData.push({
                 x: Math.round(width * 0.2),
-                y: Math.round(height * 0.97) + yOffset,
+                y: Math.round(height * 0.97) + yOffset + extraYOffset,
                 w: Math.round(width * 0.56),
                 h: 40,
             });
-            // Right ground - bajado
+            // Right ground - bajado (apply extra offset)
             this._platformData.push({
                 x: Math.round(width * 0.72),
-                y: Math.round(height * 0.99) + yOffset,
+                y: Math.round(height * 0.99) + yOffset + extraYOffset,
                 w: Math.round(width * 0.56),
                 h: 40,
             });
@@ -3946,10 +3947,10 @@ export class GameScene extends Phaser.Scene {
                 h: 24,
             });
 
-            // Middle platform
+            // Middle platform (apply extra offset)
             this._platformData.push({
                 x: Math.round(width * 0.58),
-                y: Math.round(height * 0.92) + yOffset,
+                y: Math.round(height * 0.92) + yOffset + extraYOffset,
                 w: 580,
                 h: 90,
             });
