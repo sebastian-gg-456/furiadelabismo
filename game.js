@@ -3121,7 +3121,11 @@ export class TutorialScene extends Phaser.Scene {
         // ── Jugadores ──
         this._stepObjects = [];
         this._projs = [];
+        this._animLock = { p1: 0, p2: 0 };
         this._createPlayers(width, height);
+        this._setupTutorialAnimations();
+        this._setTutorialIdle("p1");
+        this._setTutorialIdle("p2");
 
         // ── Teclas ──
         this._keys = this.input.keyboard.addKeys({
@@ -3173,6 +3177,109 @@ export class TutorialScene extends Phaser.Scene {
         this.physics.add.collider(this._p2, this._platRect);
         this._lbl1 = this.add.text(0, 0, "J1", { font: "bold 12px Arial", color: "#ffddaa", stroke: "#000", strokeThickness: 2 }).setOrigin(0.5).setDepth(15);
         this._lbl2 = this.add.text(0, 0, "J2", { font: "bold 12px Arial", color: "#aaddff", stroke: "#000", strokeThickness: 2 }).setOrigin(0.5).setDepth(15);
+    }
+
+    _getTextureFrameCount(textureKey) {
+        if (!textureKey || !this.textures.exists(textureKey)) return 0;
+        const tex = this.textures.get(textureKey);
+        let total = 1;
+        try {
+            if (tex && typeof tex.frameTotal === "number") total = Math.max(1, tex.frameTotal);
+            else if (tex && tex.frames) {
+                total = Math.max(1, Object.keys(tex.frames).filter((k) => !isNaN(+k)).length);
+            }
+        } catch (e) {
+            total = 1;
+        }
+        return total;
+    }
+
+    _ensureTutorialAnim(animKey, textureKey, cfg = {}) {
+        if (!textureKey || !this.textures.exists(textureKey)) return null;
+        const total = this._getTextureFrameCount(textureKey);
+        if (total <= 0) return null;
+
+        const startReq = typeof cfg.start === "number" ? cfg.start : 0;
+        const endReq = typeof cfg.end === "number" ? cfg.end : Math.max(0, total - 1);
+        const start = Math.min(Math.max(0, startReq), Math.max(0, total - 1));
+        const end = Math.min(Math.max(start, endReq), Math.max(0, total - 1));
+        const frameRate = typeof cfg.frameRate === "number" ? cfg.frameRate : 10;
+        const repeat = typeof cfg.repeat === "number" ? cfg.repeat : -1;
+
+        if (!this.anims.exists(animKey)) {
+            this.anims.create({
+                key: animKey,
+                frames: this.anims.generateFrameNumbers(textureKey, { start, end }),
+                frameRate,
+                repeat,
+            });
+        }
+        return animKey;
+    }
+
+    _setupTutorialAnimations() {
+        this._tutorialAnimMap = {
+            p1: {
+                idleTex: this.textures.exists("char0_idle") ? "char0_idle" : null,
+                walk: this._ensureTutorialAnim("tutorial_p1_walk", "char0_walk", { start: 0, end: 3, frameRate: 10, repeat: -1 }),
+                punch: this._ensureTutorialAnim("tutorial_p1_punch", "char0_punch", { start: 1, end: 3, frameRate: 14, repeat: 0 }),
+                shoot: this._ensureTutorialAnim("tutorial_p1_shoot", "char0_shoot", { start: 1, end: 3, frameRate: 14, repeat: 0 }),
+            },
+            p2: {
+                idleTex: this.textures.exists("char1_idle") ? "char1_idle" : null,
+                walk: this._ensureTutorialAnim("tutorial_p2_walk", this.textures.exists("sofia_walk") ? "sofia_walk" : "char1_walk", { start: 0, end: 3, frameRate: 10, repeat: -1 }),
+                punch: this._ensureTutorialAnim("tutorial_p2_punch", this.textures.exists("sofia_punch") ? "sofia_punch" : "char1_punch", { start: 1, end: 3, frameRate: 14, repeat: 0 }),
+                shoot: this._ensureTutorialAnim("tutorial_p2_shoot", "char1_shoot", { start: 1, end: 3, frameRate: 14, repeat: 0 }),
+            },
+        };
+    }
+
+    _setTutorialIdle(slot) {
+        const map = this._tutorialAnimMap && this._tutorialAnimMap[slot] ? this._tutorialAnimMap[slot] : null;
+        const sprite = slot === "p1" ? this._p1 : this._p2;
+        if (!map || !sprite) return;
+        const idleTex = map.idleTex;
+        if (idleTex && this.textures.exists(idleTex)) {
+            try {
+                if (sprite.anims && sprite.anims.isPlaying) sprite.anims.stop();
+                sprite.setTexture(idleTex);
+                sprite.setFrame(0);
+            } catch (e) {}
+        }
+    }
+
+    _syncTutorialMoveAnim(slot) {
+        const map = this._tutorialAnimMap && this._tutorialAnimMap[slot] ? this._tutorialAnimMap[slot] : null;
+        const sprite = slot === "p1" ? this._p1 : this._p2;
+        if (!map || !sprite) return;
+        const isMoving = !!(sprite.body && Math.abs(sprite.body.velocity.x) > 8);
+        if (!isMoving) {
+            this._setTutorialIdle(slot);
+            return;
+        }
+        const walkAnim = map.walk;
+        if (!walkAnim || !this.anims.exists(walkAnim) || !sprite.anims) return;
+        try {
+            if (!sprite.anims.currentAnim || sprite.anims.currentAnim.key !== walkAnim || !sprite.anims.isPlaying) {
+                sprite.play(walkAnim, true);
+            }
+        } catch (e) {}
+    }
+
+    _playTutorialAction(slot, action, duration = 260) {
+        const map = this._tutorialAnimMap && this._tutorialAnimMap[slot] ? this._tutorialAnimMap[slot] : null;
+        const sprite = slot === "p1" ? this._p1 : this._p2;
+        if (!map || !sprite || !sprite.anims) return;
+        const animKey = map[action];
+        if (!animKey || !this.anims.exists(animKey)) return;
+
+        this._animLock[slot] = this.time.now + duration;
+        try { sprite.play(animKey, false); } catch (e) {}
+
+        this.time.delayedCall(duration, () => {
+            if (!sprite || !sprite.active) return;
+            this._syncTutorialMoveAnim(slot);
+        });
     }
 
     _clearStepObjects() {
@@ -3231,8 +3338,17 @@ export class TutorialScene extends Phaser.Scene {
                 this._hudTitle.setText("② GOLPE NORMAL");
                 this._hudInstr.setText("J1: X  para golpear  •  J2: K  para golpear   |   Mando: botón X\nAcercate al maniquí — en Versus golpeás al rival; en Cooperativo golpeás monstruos.");
                 this._hudObj.setText("¡Dale 3 golpes al maniquí!   [ 0 / 3 ]");
-                this._dummy = so(this.add.rectangle(width / 2, this._groundY - 32, 44, 60, 0xcc2222).setStrokeStyle(2, 0xff8888).setDepth(8));
-                this._dummyFace = so(this.add.text(width / 2, this._groundY - 44, "👾", { font: "26px Arial" }).setOrigin(0.5).setDepth(9));
+                if (this.textures.exists("ground_enemy_walk")) {
+                    const dummyTex = this.textures.exists("ground_enemy_attack") ? "ground_enemy_attack" : "ground_enemy_walk";
+                    this._dummy = so(this.add.sprite(width / 2, this._groundY - 34, dummyTex, 0).setDepth(8));
+                    try { this._dummy.setDisplaySize(82, 82); } catch (e) {}
+                    this._dummyFace = so(this.add.text(width / 2, this._groundY - 84, "ENEMIGO", {
+                        font: "bold 12px Arial", color: "#ffaaaa", stroke: "#000", strokeThickness: 2,
+                    }).setOrigin(0.5).setDepth(9));
+                } else {
+                    this._dummy = so(this.add.rectangle(width / 2, this._groundY - 32, 44, 60, 0xcc2222).setStrokeStyle(2, 0xff8888).setDepth(8));
+                    this._dummyFace = so(this.add.text(width / 2, this._groundY - 44, "👾", { font: "26px Arial" }).setOrigin(0.5).setDepth(9));
+                }
                 so(this.add.rectangle(width / 2, this._groundY - 72, 56, 9, 0x440000).setDepth(9));
                 this._dummyHPBar = so(this.add.rectangle(width / 2 - 28, this._groundY - 72, 56, 9, 0xff3333).setOrigin(0, 0.5).setDepth(10));
                 break;
@@ -3241,12 +3357,21 @@ export class TutorialScene extends Phaser.Scene {
                 this._hudTitle.setText("③ DISPARO");
                 this._hudInstr.setText("J1: B  para disparar  •  J2: P  para disparar   |   Mando: botón B\nEn Cooperativo: uno apunta con la mira, el otro dispara (y puede CARGAR para más daño).");
                 this._hudObj.setText("¡Destruí los 2 objetivos con disparos!   [ 0 / 2 ]");
-                this._t1 = so(this.add.circle(width * 0.56, this._groundY - 95, 24, 0xff8800).setStrokeStyle(3, 0xffcc00).setDepth(8));
-                this._t1._alive = true;
-                so(this.add.text(width * 0.56, this._groundY - 95, "✕", { font: "bold 18px Arial", color: "#fff" }).setOrigin(0.5).setDepth(9));
-                this._t2 = so(this.add.circle(width * 0.74, this._groundY - 165, 24, 0xff8800).setStrokeStyle(3, 0xffcc00).setDepth(8));
-                this._t2._alive = true;
-                so(this.add.text(width * 0.74, this._groundY - 165, "✕", { font: "bold 18px Arial", color: "#fff" }).setOrigin(0.5).setDepth(9));
+                if (this.textures.exists("flying_enemy")) {
+                    this._t1 = so(this.add.sprite(width * 0.56, this._groundY - 95, "flying_enemy", 0).setDepth(8));
+                    this._t1._alive = true;
+                    try { this._t1.setDisplaySize(74, 74); } catch (e) {}
+                    this._t2 = so(this.add.sprite(width * 0.74, this._groundY - 165, "flying_enemy", 0).setDepth(8));
+                    this._t2._alive = true;
+                    try { this._t2.setDisplaySize(74, 74); } catch (e) {}
+                } else {
+                    this._t1 = so(this.add.circle(width * 0.56, this._groundY - 95, 24, 0xff8800).setStrokeStyle(3, 0xffcc00).setDepth(8));
+                    this._t1._alive = true;
+                    so(this.add.text(width * 0.56, this._groundY - 95, "✕", { font: "bold 18px Arial", color: "#fff" }).setOrigin(0.5).setDepth(9));
+                    this._t2 = so(this.add.circle(width * 0.74, this._groundY - 165, 24, 0xff8800).setStrokeStyle(3, 0xffcc00).setDepth(8));
+                    this._t2._alive = true;
+                    so(this.add.text(width * 0.74, this._groundY - 165, "✕", { font: "bold 18px Arial", color: "#fff" }).setOrigin(0.5).setDepth(9));
+                }
                 break;
             }
             case 3: {
@@ -3525,6 +3650,10 @@ export class TutorialScene extends Phaser.Scene {
         if (this._lbl1) { this._lbl1.x = this._p1.x; this._lbl1.y = this._p1.y - 44; }
         if (this._lbl2 && this._lbl2.visible) { this._lbl2.x = this._p2.x; this._lbl2.y = this._p2.y - 44; }
         if (this._arrow) { this._arrow.x = this._p1.x; this._arrow.y = this._p1.y - 62 + Math.sin(time / 220) * 6; }
+
+        if (time >= (this._animLock.p1 || 0)) this._syncTutorialMoveAnim("p1");
+        if (!coopStep && this._p2 && this._p2.visible && time >= (this._animLock.p2 || 0)) this._syncTutorialMoveAnim("p2");
+
         if (this._stepComplete) {
             this._updateProjectiles(width);
             if (coopStep) this._updateCoopProjectiles(time, delta);
@@ -3543,6 +3672,8 @@ export class TutorialScene extends Phaser.Scene {
                 this._p1HitLast = pad1 && pad1.buttons[2] && pad1.buttons[2].pressed;
                 this._p2HitLast = pad2 && pad2.buttons[2] && pad2.buttons[2].pressed;
                 const dX = this._dummy ? this._dummy.x : 9999, dY = this._dummy ? this._dummy.y : 9999;
+                if (hit1) this._playTutorialAction("p1", "punch", 260);
+                if (hit2) this._playTutorialAction("p2", "punch", 260);
                 if (hit1 && Phaser.Math.Distance.Between(this._p1.x, this._p1.y, dX, dY) < 120) this._hitDummy();
                 if (hit2 && Phaser.Math.Distance.Between(this._p2.x, this._p2.y, dX, dY) < 120) this._hitDummy();
                 break;
@@ -3552,8 +3683,18 @@ export class TutorialScene extends Phaser.Scene {
                 const s2 = Phaser.Input.Keyboard.JustDown(this._keys.p2Shoot) || (pad2 && pad2.buttons[1] && pad2.buttons[1].pressed && !this._p2ShootLast);
                 this._p1ShootLast = pad1 && pad1.buttons[1] && pad1.buttons[1].pressed;
                 this._p2ShootLast = pad2 && pad2.buttons[1] && pad2.buttons[1].pressed;
-                if (s1 && time > this._shootCd.p1) { this._shootCd.p1 = time + 350; const dir = this._p1.flipX ? -1 : 1; this._spawnProj(this._p1.x + dir * 28, this._p1.y - 8, dir); }
-                if (s2 && time > this._shootCd.p2) { this._shootCd.p2 = time + 350; const dir = this._p2.flipX ? -1 : 1; this._spawnProj(this._p2.x + dir * 28, this._p2.y - 8, dir); }
+                if (s1 && time > this._shootCd.p1) {
+                    this._shootCd.p1 = time + 350;
+                    const dir = this._p1.flipX ? -1 : 1;
+                    this._playTutorialAction("p1", "shoot", 250);
+                    this._spawnProj(this._p1.x + dir * 28, this._p1.y - 8, dir);
+                }
+                if (s2 && time > this._shootCd.p2) {
+                    this._shootCd.p2 = time + 350;
+                    const dir = this._p2.flipX ? -1 : 1;
+                    this._playTutorialAction("p2", "shoot", 250);
+                    this._spawnProj(this._p2.x + dir * 28, this._p2.y - 8, dir);
+                }
                 this._updateProjectiles(width);
                 break;
             }
