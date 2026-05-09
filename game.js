@@ -2925,11 +2925,10 @@ export class TutorialScene extends Phaser.Scene {
         this._groundY = height - 55;
         this._groundRect = this.add.rectangle(width / 2, this._groundY + 10, width, 20, 0x5c3d1e).setDepth(2);
         this.physics.add.existing(this._groundRect, true);
-        const platBorder = this.add.rectangle(width / 2, platY, platW, 14).setStrokeStyle(2, 0xd4a96a, 1).setFillStyle(0, 0);
 
         // ── TÍTULO de la escena ──
-        this.add.text(width / 2, 28, "TUTORIAL", {
-            font: "bold 40px Arial", color: "#ffd7a0", stroke: "#000", strokeThickness: 4
+        this.add.text(width / 2, 92, "TUTORIAL", {
+            font: "bold 34px Arial", color: "#ffd7a0", stroke: "#000", strokeThickness: 4
         }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(100);
 
         // ── Pasos del tutorial ──
@@ -3069,7 +3068,7 @@ export class TutorialScene extends Phaser.Scene {
 
         // Título del paso
         // ── PLATAFORMA flotante central ──
-        this._platY = this._groundY - 150;
+        this._platY = this._groundY - 115;
         this._platRect = this.add.rectangle(width / 2, this._platY, 240, 14, 0x7a5230).setDepth(2);
         this.physics.add.existing(this._platRect, true);
         this.add.rectangle(width / 2, this._platY, 240, 14)
@@ -3087,19 +3086,20 @@ export class TutorialScene extends Phaser.Scene {
         }).setOrigin(0.5, 0).setDepth(60).setScrollFactor(0);
 
         // ── HUD: caja de objetivo ──
-        const objBoxY = height - 68;
-        this.add.rectangle(width / 2, objBoxY, width - 30, 82, 0x000000, 0.75)
+        const objBoxY = 132;
+        const objBoxW = Math.min(width - 30, 760);
+        this.add.rectangle(width / 2, objBoxY, objBoxW, 64, 0x000000, 0.72)
             .setDepth(59).setScrollFactor(0);
-        this.add.text(20, objBoxY - 28, "OBJETIVO:", {
+        this.add.text((width - objBoxW) / 2 + 14, objBoxY - 20, "OBJETIVO:", {
             font: "bold 13px Arial", color: "#ffc36a"
         }).setDepth(60).setScrollFactor(0);
-        this._hudObj = this.add.text(width / 2, objBoxY - 10, "", {
-            font: "bold 20px Arial", color: "#ffffff", stroke: "#000", strokeThickness: 3,
-            wordWrap: { width: width - 60 }, align: "center"
+        this._hudObj = this.add.text(width / 2, objBoxY + 2, "", {
+            font: "bold 19px Arial", color: "#ffffff", stroke: "#000", strokeThickness: 3,
+            wordWrap: { width: objBoxW - 36 }, align: "center"
         }).setOrigin(0.5, 0).setDepth(60).setScrollFactor(0);
 
         // ── Puntos de progreso ──
-        this._totalSteps = 5;
+        this._totalSteps = 7;
         this._dots = [];
         const dotSpacing = 28;
         const dotsStartX = width / 2 - ((this._totalSteps - 1) * dotSpacing) / 2;
@@ -3127,8 +3127,8 @@ export class TutorialScene extends Phaser.Scene {
         this._keys = this.input.keyboard.addKeys({
             p1Left: "A", p1Right: "D", p1Up: "W",
             p1Hit: "X", p1Shoot: "B", p1Block: "C",
-            p2Left: "LEFT", p2Right: "RIGHT", p2Up: "UP",
-            p2Hit: "K", p2Shoot: "P", p2Block: "L",
+            p2Left: "LEFT", p2Right: "RIGHT", p2Up: "UP", p2Down: "DOWN",
+            p2Hit: "K", p2Shoot: "P", p2Block: "L", p2Charge: "O",
         });
         this._shootCd = { p1: 0, p2: 0 };
 
@@ -3139,6 +3139,9 @@ export class TutorialScene extends Phaser.Scene {
 
     _createPlayers(width, height) {
         const spawnY = this._groundY - 36;
+        this._spawnY = spawnY;
+        this._spawnP1X = 160;
+        this._spawnP2X = width - 160;
         const p1key = this.textures.exists("char0_idle") ? "char0_idle" : null;
         const p2key = this.textures.exists("char1_idle") ? "char1_idle" : null;
         if (p1key) {
@@ -3150,7 +3153,7 @@ export class TutorialScene extends Phaser.Scene {
             this.physics.add.existing(r);
             this._p1 = r;
         }
-        if (this._p1.body) this._p1.body.setGravityY(500);
+        if (this._p1.body) this._p1.body.setGravityY(460);
         this._p1.setCollideWorldBounds(true);
         if (p2key) {
             this._p2 = this.physics.add.sprite(width - 160, spawnY, p2key).setDepth(10);
@@ -3161,7 +3164,7 @@ export class TutorialScene extends Phaser.Scene {
             this.physics.add.existing(r);
             this._p2 = r;
         }
-        if (this._p2.body) this._p2.body.setGravityY(500);
+        if (this._p2.body) this._p2.body.setGravityY(460);
         this._p2.setCollideWorldBounds(true);
         try { this._p2.setFlipX(true); } catch(e) {}
         this.physics.add.collider(this._p1, this._groundRect);
@@ -3177,10 +3180,15 @@ export class TutorialScene extends Phaser.Scene {
         this._stepObjects = [];
         this._projs.forEach(p => { try { if (p.rect) p.rect.destroy(); } catch(e) {} });
         this._projs = [];
+        this._coopShots = [];
+        this._coopEnemyShots = [];
         this._dummy = null; this._dummyFace = null; this._dummyHPBar = null;
         this._t1 = null; this._t2 = null;
         this._enBar = null; this._enLabel = null;
         this._seqKeys = null; this._arrow = null;
+        this._coopReticle = null;
+        this._coopInfo = null;
+        this._coopEnemyDummy = null;
     }
 
     _showStep(n) {
@@ -3188,9 +3196,27 @@ export class TutorialScene extends Phaser.Scene {
         this._step = n;
         this._stepComplete = false;
         this._hitCount = 0; this._targetsHit = 0; this._energy = 0; this._comboBuffer = [];
+        this._coopTutorial = false;
         const { width, height } = this.scale;
         this._dots.forEach((d, i) => d.setFillStyle(i === n ? 0xffc36a : 0x4b2e1f));
         const so = obj => { if (obj) this._stepObjects.push(obj); return obj; };
+        if (this._p1 && this._p1.body) {
+            this._p1.body.enable = true;
+            this._p1.body.setVelocity(0, 0);
+        }
+        if (this._p2 && this._p2.body) {
+            this._p2.body.enable = true;
+            this._p2.body.setVelocity(0, 0);
+        }
+        try {
+            if (this._p1) this._p1.setPosition(this._spawnP1X, this._spawnY);
+            if (this._p2) this._p2.setPosition(this._spawnP2X, this._spawnY);
+            if (this._p1) this._p1.setVisible(true);
+            if (this._p2) this._p2.setVisible(true);
+            if (this._lbl2) this._lbl2.setVisible(true);
+            if (this._p1 && this._p1.clearTint) this._p1.clearTint();
+            if (this._p2 && this._p2.clearTint) this._p2.clearTint();
+        } catch (e) {}
         switch (n) {
             case 0: {
                 this._hudTitle.setText("① MOVIMIENTO Y SALTO");
@@ -3245,6 +3271,69 @@ export class TutorialScene extends Phaser.Scene {
                     so(this.add.text(width / 2,       seqY, "► DER", { font: "bold 20px Arial", color: "#555577" }).setOrigin(0.5).setDepth(11)),
                     so(this.add.text(width / 2 + 130, seqY, "✊ GOLPE", { font: "bold 20px Arial", color: "#555577" }).setOrigin(0.5).setDepth(11)),
                 ];
+                break;
+            }
+            case 5: {
+                this._hudTitle.setText("⑥ MODO COOPERATIVO: ROLES");
+                this._hudInstr.setText(
+                    "Réplica CO-OP real: se usa UN SOLO cuerpo (personaje fusionado de los 2 elegidos).\n" +
+                    "J1 controla el cuerpo: mover/saltar/golpe/bloqueo.\n" +
+                    "J2 controla la mira y el disparo: P disparo rápido, O disparo cargado, L parry (o botón A en mando)."
+                );
+                this._coopTutorial = true;
+                this._coopDidMoveBody = false;
+                this._coopDidMoveReticle = false;
+                this._coopDidShoot = false;
+                this._coopDidParry = false;
+                this._coopCharge = 0;
+                this._coopEnemyNext = 0;
+                this._coopParryPressTime = 0;
+
+                if (this._p1) this._p1.setPosition(width * 0.34, this._spawnY);
+                if (this._p2 && this._p2.body) this._p2.body.enable = false;
+                if (this._p2) this._p2.setVisible(false).setPosition(-999, -999);
+                if (this._lbl2) this._lbl2.setVisible(false);
+
+                this._coopReticle = so(this.add.circle(this._p1.x + 110, this._p1.y - 30, 10, 0xffee44)
+                    .setStrokeStyle(2, 0x8d6a44).setDepth(16));
+                so(this.add.text(this._p1.x, this._p1.y - 56, "CUERPO", {
+                    font: "bold 12px Arial", color: "#ffddaa", stroke: "#000", strokeThickness: 2
+                }).setOrigin(0.5).setDepth(16));
+                so(this.add.text(this._coopReticle.x, this._coopReticle.y - 22, "MIRA", {
+                    font: "bold 12px Arial", color: "#ffef99", stroke: "#000", strokeThickness: 2
+                }).setOrigin(0.5).setDepth(16));
+
+                this._coopEnemyDummy = so(this.add.rectangle(width * 0.82, this._groundY - 38, 42, 72, 0x7d1f1f)
+                    .setStrokeStyle(2, 0xff8888).setDepth(8));
+                so(this.add.text(width * 0.82, this._groundY - 82, "ENEMIGO", {
+                    font: "bold 12px Arial", color: "#ff9999", stroke: "#000", strokeThickness: 2
+                }).setOrigin(0.5).setDepth(9));
+
+                this._hudObj.setText("CO-OP: cuerpo+mira+disparo+parry [ 0 / 4 ]");
+                break;
+            }
+            case 6: {
+                this._hudTitle.setText("⑦ CO-OP: ENERGÍA COMPARTIDA");
+                this._hudInstr.setText(
+                    "En cooperativo, la energía se recarga solo cuando LOS DOS sostienen su acción defensiva.\n" +
+                    "J1: C para bloquear   •   J2: L para parry/bloqueo   (en mando: botón A de ambos)."
+                );
+                this._coopTutorial = true;
+                this._coopCharge = 0;
+                if (this._p1) this._p1.setPosition(width * 0.4, this._spawnY);
+                if (this._p2 && this._p2.body) this._p2.body.enable = false;
+                if (this._p2) this._p2.setVisible(false).setPosition(-999, -999);
+                if (this._lbl2) this._lbl2.setVisible(false);
+                this._coopReticle = so(this.add.circle(this._p1.x + 105, this._p1.y - 28, 10, 0xffee44)
+                    .setStrokeStyle(2, 0x8d6a44).setDepth(16));
+                this._hudObj.setText("Mantengan C + L (o A+A en mando) hasta 100%.");
+                const barX = width / 2 - 200, barW = 400, barY = this._platY - 56;
+                so(this.add.rectangle(width / 2, barY, barW, 24, 0x1f1420).setStrokeStyle(2, 0xd08b3f).setDepth(10));
+                this._enBar = so(this.add.rectangle(barX, barY, 2, 24, 0xffb347).setOrigin(0, 0.5).setDepth(11));
+                this._enBar._maxW = barW;
+                this._enLabel = so(this.add.text(width / 2, barY - 24, "CARGA CO-OP: 0 %", {
+                    font: "bold 17px Arial", color: "#ffd699"
+                }).setOrigin(0.5).setDepth(12));
                 break;
             }
         }
@@ -3311,6 +3400,76 @@ export class TutorialScene extends Phaser.Scene {
         this._stepObjects.push(btn);
     }
 
+    _spawnCoopShot(damage = 20) {
+        if (!this._coopReticle || !this._p1) return;
+        const x = this._p1.x;
+        const y = this._p1.y - 12;
+        const ang = Phaser.Math.Angle.Between(x, y, this._coopReticle.x, this._coopReticle.y);
+        const speed = damage > 24 ? 680 : 560;
+        const rect = this.add.circle(x, y, damage > 24 ? 7 : 5, damage > 24 ? 0xffdd88 : 0xffcc44).setDepth(17);
+        this._coopShots.push({ rect, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed });
+        this._stepObjects.push(rect);
+        this._coopDidShoot = true;
+    }
+
+    _spawnCoopEnemyShot() {
+        if (!this._p1) return;
+        const { width } = this.scale;
+        const sx = width + 24;
+        const sy = this._groundY - Phaser.Math.Between(20, 84);
+        const ang = Phaser.Math.Angle.Between(sx, sy, this._p1.x, this._p1.y - 10);
+        const speed = 300;
+        const rect = this.add.circle(sx, sy, 6, 0xff5566).setDepth(16);
+        this._coopEnemyShots.push({ rect, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, reflected: false });
+        this._stepObjects.push(rect);
+    }
+
+    _updateCoopProjectiles(time, delta) {
+        const { width, height } = this.scale;
+        const dt = Math.min(0.05, delta / 1000);
+        const p1x = this._p1 ? this._p1.x : 0;
+        const p1y = this._p1 ? this._p1.y - 10 : 0;
+
+        for (let i = this._coopShots.length - 1; i >= 0; i--) {
+            const p = this._coopShots[i];
+            if (!p || !p.rect || !p.rect.active) { this._coopShots.splice(i, 1); continue; }
+            p.rect.x += p.vx * dt;
+            p.rect.y += p.vy * dt;
+            if (p.rect.x < -40 || p.rect.x > width + 40 || p.rect.y < -40 || p.rect.y > height + 40) {
+                try { p.rect.destroy(); } catch (e) {}
+                this._coopShots.splice(i, 1);
+            }
+        }
+
+        for (let i = this._coopEnemyShots.length - 1; i >= 0; i--) {
+            const e = this._coopEnemyShots[i];
+            if (!e || !e.rect || !e.rect.active) { this._coopEnemyShots.splice(i, 1); continue; }
+            e.rect.x += e.vx * dt;
+            e.rect.y += e.vy * dt;
+
+            const dBody = Phaser.Math.Distance.Between(e.rect.x, e.rect.y, p1x, p1y);
+            const parryWindow = this._coopParryPressTime && (time - this._coopParryPressTime < 420);
+            if (!e.reflected && dBody < 46 && parryWindow) {
+                e.reflected = true;
+                e.vx *= -1.35;
+                e.vy *= -1.35;
+                try { e.rect.setFillStyle(0xff33ff); } catch (err) {}
+                this._coopDidParry = true;
+                this.cameras.main.flash(90, 255, 255, 0);
+            } else if (!e.reflected && dBody < 20) {
+                this.cameras.main.flash(80, 255, 60, 60);
+                try { e.rect.destroy(); } catch (err) {}
+                this._coopEnemyShots.splice(i, 1);
+                continue;
+            }
+
+            if (e.rect.x < -60 || e.rect.x > width + 60 || e.rect.y < -60 || e.rect.y > height + 60) {
+                try { e.rect.destroy(); } catch (err) {}
+                this._coopEnemyShots.splice(i, 1);
+            }
+        }
+    }
+
     _spawnProj(x, y, dir) {
         const rect = this.add.rectangle(x, y, 18, 8, 0xffcc44).setDepth(15);
         this._projs.push({ rect, vx: dir * 600 });
@@ -3339,7 +3498,8 @@ export class TutorialScene extends Phaser.Scene {
     update(time, delta) {
         if (!this._p1 || !this._p2) return;
         const { width } = this.scale;
-        const SPEED = 230, JUMP = -480;
+        const coopStep = this._step >= 5;
+        const SPEED = 230, JUMP = -560;
         const pad1 = this.input.gamepad ? (this.input.gamepad.gamepads[0] || null) : null;
         const pad2 = this.input.gamepad ? (this.input.gamepad.gamepads[1] || null) : null;
         const p1g = this._p1.body && this._p1.body.blocked && this._p1.body.blocked.down;
@@ -3350,18 +3510,26 @@ export class TutorialScene extends Phaser.Scene {
         const pad1Up = pad1 && ((pad1.buttons[12] && pad1.buttons[12].pressed) || (pad1.axes[1] && pad1.axes[1].getValue() < -0.5));
         if ((Phaser.Input.Keyboard.JustDown(this._keys.p1Up) || (pad1Up && !this._pad1WasUp)) && p1g) this._p1.body.setVelocityY(JUMP);
         this._pad1WasUp = pad1Up;
-        const p2g = this._p2.body && this._p2.body.blocked && this._p2.body.blocked.down;
         const ax2 = pad2 && pad2.axes[0] ? pad2.axes[0].getValue() : 0;
-        if (this._keys.p2Left.isDown || ax2 < -0.3) { this._p2.body.setVelocityX(-SPEED); try { this._p2.setFlipX(true); } catch(e) {} }
-        else if (this._keys.p2Right.isDown || ax2 > 0.3) { this._p2.body.setVelocityX(SPEED); try { this._p2.setFlipX(false); } catch(e) {} }
-        else { this._p2.body.setVelocityX(0); }
-        const pad2Up = pad2 && ((pad2.buttons[12] && pad2.buttons[12].pressed) || (pad2.axes[1] && pad2.axes[1].getValue() < -0.5));
-        if ((Phaser.Input.Keyboard.JustDown(this._keys.p2Up) || (pad2Up && !this._pad2WasUp)) && p2g) this._p2.body.setVelocityY(JUMP);
-        this._pad2WasUp = pad2Up;
+        if (!coopStep) {
+            const p2g = this._p2.body && this._p2.body.blocked && this._p2.body.blocked.down;
+            if (this._keys.p2Left.isDown || ax2 < -0.3) { this._p2.body.setVelocityX(-SPEED); try { this._p2.setFlipX(true); } catch(e) {} }
+            else if (this._keys.p2Right.isDown || ax2 > 0.3) { this._p2.body.setVelocityX(SPEED); try { this._p2.setFlipX(false); } catch(e) {} }
+            else { this._p2.body.setVelocityX(0); }
+            const pad2Up = pad2 && ((pad2.buttons[12] && pad2.buttons[12].pressed) || (pad2.axes[1] && pad2.axes[1].getValue() < -0.5));
+            if ((Phaser.Input.Keyboard.JustDown(this._keys.p2Up) || (pad2Up && !this._pad2WasUp)) && p2g) this._p2.body.setVelocityY(JUMP);
+            this._pad2WasUp = pad2Up;
+        } else if (this._p2 && this._p2.body) {
+            this._p2.body.setVelocity(0, 0);
+        }
         if (this._lbl1) { this._lbl1.x = this._p1.x; this._lbl1.y = this._p1.y - 44; }
-        if (this._lbl2) { this._lbl2.x = this._p2.x; this._lbl2.y = this._p2.y - 44; }
+        if (this._lbl2 && this._lbl2.visible) { this._lbl2.x = this._p2.x; this._lbl2.y = this._p2.y - 44; }
         if (this._arrow) { this._arrow.x = this._p1.x; this._arrow.y = this._p1.y - 62 + Math.sin(time / 220) * 6; }
-        if (this._stepComplete) { this._updateProjectiles(width); return; }
+        if (this._stepComplete) {
+            this._updateProjectiles(width);
+            if (coopStep) this._updateCoopProjectiles(time, delta);
+            return;
+        }
         switch (this._step) {
             case 0: {
                 const on1 = this._p1.y < this._platY + 18 && Math.abs(this._p1.x - width / 2) < 135;
@@ -3447,6 +3615,106 @@ export class TutorialScene extends Phaser.Scene {
                 });
                 break;
             }
+            case 5: {
+                if (Math.abs(this._p1.body.velocity.x) > 20 || Math.abs(this._p1.body.velocity.y) > 20) this._coopDidMoveBody = true;
+
+                const prevRx = this._coopReticle ? this._coopReticle.x : 0;
+                const prevRy = this._coopReticle ? this._coopReticle.y : 0;
+                if (this._coopReticle) {
+                    if (this._keys.p2Left.isDown) this._coopReticle.x -= 4;
+                    if (this._keys.p2Right.isDown) this._coopReticle.x += 4;
+                    if (this._keys.p2Up.isDown) this._coopReticle.y -= 4;
+                    if (this._keys.p2Down.isDown) this._coopReticle.y += 4;
+                    const ay2 = pad2 && pad2.axes[1] ? pad2.axes[1].getValue() : 0;
+                    if (pad2 && pad2.connected) {
+                        this._coopReticle.x += ax2 * 5;
+                        this._coopReticle.y += ay2 * 5;
+                    }
+                    const dx = this._coopReticle.x - this._p1.x;
+                    const dy = this._coopReticle.y - this._p1.y;
+                    const maxD = 280;
+                    const d = Math.hypot(dx, dy);
+                    if (d > maxD) {
+                        this._coopReticle.x = this._p1.x + (dx / d) * maxD;
+                        this._coopReticle.y = this._p1.y + (dy / d) * maxD;
+                    }
+                }
+                if (Math.abs((this._coopReticle ? this._coopReticle.x : 0) - prevRx) > 0.5 || Math.abs((this._coopReticle ? this._coopReticle.y : 0) - prevRy) > 0.5) {
+                    this._coopDidMoveReticle = true;
+                }
+
+                const p2Quick = Phaser.Input.Keyboard.JustDown(this._keys.p2Shoot) || !!(pad2 && pad2.buttons[1] && pad2.buttons[1].pressed && !this._p2QuickLast);
+                const p2ChargeHeld = this._keys.p2Charge.isDown || !!(pad2 && pad2.buttons[2] && pad2.buttons[2].pressed);
+                const p2ChargeReleased = !p2ChargeHeld && this._p2ChargeLast;
+                this._p2QuickLast = !!(pad2 && pad2.buttons[1] && pad2.buttons[1].pressed);
+                this._p2ChargeLast = p2ChargeHeld;
+
+                if (p2ChargeHeld) {
+                    this._coopCharge = Math.min(220, this._coopCharge + (delta / 1000) * 130);
+                    try { if (this._coopReticle) this._coopReticle.setScale(1 + Math.min(1.1, this._coopCharge / 200)); } catch (e) {}
+                }
+                if (p2ChargeReleased && this._coopCharge > 0) {
+                    const damage = 20 + Math.floor(this._coopCharge / 25) * 3;
+                    this._spawnCoopShot(damage);
+                    this._coopCharge = 0;
+                    try { if (this._coopReticle) this._coopReticle.setScale(1); } catch (e) {}
+                }
+                if (p2Quick && time > this._shootCd.p2) {
+                    this._shootCd.p2 = time + 260;
+                    this._spawnCoopShot(20);
+                }
+
+                const parryPressed = Phaser.Input.Keyboard.JustDown(this._keys.p2Block) || !!(pad2 && pad2.buttons[0] && pad2.buttons[0].pressed && !this._p2BlockLast);
+                this._p2BlockLast = !!(pad2 && pad2.buttons[0] && pad2.buttons[0].pressed);
+                if (parryPressed) this._coopParryPressTime = time;
+
+                if (time > this._coopEnemyNext) {
+                    this._coopEnemyNext = time + Phaser.Math.Between(1000, 1500);
+                    this._spawnCoopEnemyShot();
+                }
+                this._updateCoopProjectiles(time, delta);
+
+                const doneCount =
+                    (this._coopDidMoveBody ? 1 : 0) +
+                    (this._coopDidMoveReticle ? 1 : 0) +
+                    (this._coopDidShoot ? 1 : 0) +
+                    (this._coopDidParry ? 1 : 0);
+                this._hudObj.setText(`CO-OP: cuerpo+mira+disparo+parry [ ${doneCount} / 4 ]`);
+                if (doneCount >= 4) this._complete();
+                break;
+            }
+            case 6: {
+                if (this._coopReticle) {
+                    if (this._keys.p2Left.isDown) this._coopReticle.x -= 2.5;
+                    if (this._keys.p2Right.isDown) this._coopReticle.x += 2.5;
+                }
+
+                const bothKb = this._keys.p1Block.isDown && this._keys.p2Block.isDown;
+                const bothPad = !!(
+                    pad1 && pad2 &&
+                    pad1.buttons[0] && pad1.buttons[0].pressed &&
+                    pad2.buttons[0] && pad2.buttons[0].pressed
+                );
+                const bothHolding = bothKb || bothPad;
+                if (bothHolding) {
+                    this._energy = Math.min(100, this._energy + (delta / 1000) * 36);
+                    try { this._p1.setTint(0xffd080); } catch(e) {}
+                    try { if (this._coopReticle) this._coopReticle.setFillStyle(0x66ffcc); } catch(e) {}
+                } else {
+                    this._energy = Math.max(0, this._energy - (delta / 1000) * 10);
+                    try { this._p1.clearTint(); } catch(e) {}
+                    try { if (this._coopReticle) this._coopReticle.setFillStyle(0xffee44); } catch(e) {}
+                }
+                const pct = this._energy / 100;
+                if (this._enBar) this._enBar.width = Math.max(2, this._enBar._maxW * pct);
+                if (this._enLabel) this._enLabel.setText(`CARGA CO-OP: ${Math.floor(this._energy)} %`);
+                if (this._energy >= 100) {
+                    try { this._p1.clearTint(); } catch(e) {}
+                    try { if (this._coopReticle) this._coopReticle.setFillStyle(0xffee44); } catch(e) {}
+                    this._complete();
+                }
+                break;
+            }
         }
     }
 }
@@ -3466,6 +3734,130 @@ export class ModeSelector extends Phaser.Scene {
         } catch (e) {}
 
         const { width, height } = this.scale;
+
+        this.selectedIndex = 0;
+        this.buttons = [];
+
+        this.cameras.main.setBackgroundColor(0x001933);
+
+        // -------------------------
+        // Estilo (igual al resto)
+        // -------------------------
+
+        const buttonSize = 260; // mas grandes
+        const spacing = 140;
+
+        const buttonColor = 0x4b2e1f;
+        const strokeColor = 0x8d6a44;
+        const textColor   = "#ffe6c7";
+
+        const centerX = width / 2;
+        const centerY = height / 2 + 40;
+
+        // -------------------------
+        // Titulo
+        // -------------------------
+
+        this.add.text(
+            width / 2,
+            70,
+            isEnglish ? "SELECT MODE" : "SELECCIONAR MODO",
+            {
+                font: "48px Arial",
+                color: "#d8c19a"
+            }
+        ).setOrigin(0.5);
+
+        // -------------------------
+        // Botones
+        // -------------------------
+
+        const versusX = centerX - buttonSize / 2 - spacing / 2;
+        const coopX   = centerX + buttonSize / 2 + spacing / 2;
+
+        const versusButton = this.add.rectangle(
+            versusX,
+            centerY,
+            buttonSize,
+            buttonSize,
+            buttonColor,
+            0.95
+        )
+        .setInteractive({ useHandCursor: true })
+        .setStrokeStyle(3, strokeColor);
+
+        const coopButton = this.add.rectangle(
+            coopX,
+            centerY,
+            buttonSize,
+            buttonSize,
+            buttonColor,
+            0.95
+        )
+        .setInteractive({ useHandCursor: true })
+        .setStrokeStyle(3, strokeColor);
+
+        // sombra suave
+        this.add.rectangle(
+            versusX + 6,
+            centerY + 6,
+            buttonSize,
+            buttonSize,
+            0x000000,
+            0.25
+        ).setDepth(-1);
+
+        this.add.rectangle(
+            coopX + 6,
+            centerY + 6,
+            buttonSize,
+            buttonSize,
+            0x000000,
+            0.25
+        ).setDepth(-1);
+
+        this.add.text(
+            versusButton.x,
+            versusButton.y,
+            "VERSUS",
+            {
+                font: "36px Arial",
+                color: textColor
+            }
+        ).setOrigin(0.5);
+
+        this.add.text(
+            coopButton.x,
+            coopButton.y,
+            "CO-OP",
+            {
+                font: "36px Arial",
+                color: textColor
+            }
+        ).setOrigin(0.5);
+
+        // -------------------------
+        // Botones logicos
+        // -------------------------
+
+        this.buttons.push({
+            rect: versusButton,
+            mode: "versus",
+            callback: () => this.cleanupAndStart(
+                "CharacterSelector",
+                { mode: "versus" }
+            )
+        });
+
+        this.buttons.push({
+            rect: coopButton,
+            mode: "cooperativo",
+            callback: () => this.cleanupAndStart(
+                "CharacterSelector",
+                { mode: "cooperativo" }
+            )
+        });
+
         // -------------------------
 
         this.selector = this.add.rectangle(
