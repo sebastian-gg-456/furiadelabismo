@@ -7,7 +7,7 @@ if (!window.GOOGLE_CLIENT_ID) {
 }
 
 // Import core scene classes from game.js (ES module)
-import { LoginScene, Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver } from '../game.js';
+import { LoginScene, Preloader, Menu, ControlsScene, TutorialScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver } from '../game.js';
 
 // Configuración principal de Phaser
 const BASE_WIDTH = 1024;
@@ -34,7 +34,7 @@ const gameConfig = {
         height: BASE_HEIGHT,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    scene: [LoginScene, Preloader, Menu, ModeSelector, CharacterSelector, MapSelector, GameScene, ControlsScene, GameOver] // <-- LoginScene ahora es la primera
+    scene: [LoginScene, Preloader, Menu, ControlsScene, TutorialScene, ModeSelector, CharacterSelector, MapSelector, GameScene, GameOver] // <-- LoginScene ahora es la primera
 };
 
 // Inicializar el juego

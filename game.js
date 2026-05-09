@@ -2277,6 +2277,7 @@ export class Menu extends Phaser.Scene {
             this.playText.setText(getPhrase('Jugar'));
             this.langText.setText(getPhrase('Idioma'));
             this.controlsText.setText(getPhrase('Controles'));
+            if (this.tutorialText) this.tutorialText.setText(isEnglish ? 'Tutorial' : 'Tutorial');
         };
 
         this.cameras.main.setBackgroundColor(0x001d33);
@@ -2367,6 +2368,25 @@ export class Menu extends Phaser.Scene {
         this.buttons.push({
             rect: controlsButton,
             callback: () => this.cleanupAndStart("ControlsScene")
+        });
+
+        // TUTORIAL
+        startY += buttonHeight + spacing;
+
+        const tutorialButton = this.add
+            .rectangle(width / 2, startY, buttonWidth, buttonHeight, 0x1e2e14, 0.95)
+            .setInteractive();
+
+        tutorialButton.setStrokeStyle(2, 0x5a8a34);
+
+        this.tutorialText = this.add.text(width / 2, startY, isEnglish ? "TUTORIAL" : "TUTORIAL", {
+            font: "28px Arial",
+            color: "#c8ffb0"
+        }).setOrigin(0.5);
+
+        this.buttons.push({
+            rect: tutorialButton,
+            callback: () => this.cleanupAndStart("TutorialScene")
         });
 
         // Marco selector
@@ -2875,6 +2895,296 @@ export class ControlsScene extends Phaser.Scene {
 
         Object.values(this.panels).forEach(p => p.setVisible(false));
         if (this.panels[btn.key]) this.panels[btn.key].setVisible(true);
+    }
+}
+
+// ─────────────────────────────────────────────
+// --- ESCENA TUTORIAL ---
+// ─────────────────────────────────────────────
+export class TutorialScene extends Phaser.Scene {
+    constructor() {
+        super("TutorialScene");
+        this._currentStep = 0;
+    }
+
+    create() {
+        const { width, height } = this.scale;
+        ensureMenuMusic(this);
+
+        // ── FONDO simple color oscuro ──
+        this.cameras.main.setBackgroundColor(0x0d1b2a);
+
+        // Fondo decorativo degradado
+        const bgGrad = this.add.graphics();
+        bgGrad.fillGradientStyle(0x0d1b2a, 0x0d1b2a, 0x1a3a4a, 0x1a3a4a, 1);
+        bgGrad.fillRect(0, 0, width, height);
+
+        // ── PLATAFORMA base ──
+        const groundH = 18;
+        const groundY = height - 90;
+        const ground = this.add.rectangle(width / 2, groundY, width, groundH, 0x5c3d1e);
+        this.physics.add.existing(ground, true);
+
+        // Plataforma flotante central (para demostrar salto)
+        const platW = 220;
+        const platY = groundY - 140;
+        const platform = this.add.rectangle(width / 2, platY, platW, 14, 0x7a5230);
+        this.physics.add.existing(platform, true);
+        // Borde decorativo
+        const platBorder = this.add.rectangle(width / 2, platY, platW, 14).setStrokeStyle(2, 0xd4a96a, 1).setFillStyle(0, 0);
+
+        // ── TÍTULO de la escena ──
+        this.add.text(width / 2, 28, "TUTORIAL", {
+            font: "bold 40px Arial", color: "#ffd7a0", stroke: "#000", strokeThickness: 4
+        }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(100);
+
+        // ── Pasos del tutorial ──
+        this._steps = [
+            {
+                title: "① MOVIMIENTO",
+                lines: [
+                    "Cada personaje puede moverse independientemente.",
+                    "",
+                    "  Jugador 1 (teclado):  A = Izquierda   D = Derecha   W = Saltar",
+                    "  Jugador 2 (teclado):  ← = Izquierda   → = Derecha   ↑ = Saltar",
+                    "",
+                    "  Con mando: Palanca izquierda (horizontal) para moverse.",
+                    "             Empujar palanca ↑ o D-Pad ↑ para saltar.",
+                    "",
+                    "Podés saltar sobre plataformas flotantes para ganar altura.",
+                    "Caer al vacío quita vida — ¡no te caigas del escenario!",
+                ],
+            },
+            {
+                title: "② ATAQUE NORMAL",
+                lines: [
+                    "El golpe normal es el ataque básico de cada personaje.",
+                    "",
+                    "  Jugador 1:  X   (teclado)   |   Botón X del mando",
+                    "  Jugador 2:  K   (teclado)   |   Botón X del mando",
+                    "",
+                    "  Modo VERSUS: pegale directamente al otro jugador.",
+                    "    → Cuanto más cerca estés, más daño infligís.",
+                    "    → El bloqueo reduce el daño recibido (ver más adelante).",
+                    "",
+                    "  Modo COOPERATIVO: los jugadores se fusionan en un solo cuerpo.",
+                    "    → Un jugador mueve y golpea físicamente a los monstruos.",
+                    "    → El otro apunta y dispara al mismo tiempo.",
+                    "    → ¡Coordínense para sobrevivir las oleadas y vencer al jefe!",
+                ],
+            },
+            {
+                title: "③ DISPARO",
+                lines: [
+                    "  Jugador 1:  B   (teclado)   |   Botón B del mando",
+                    "  Jugador 2:  P   (teclado)   |   Botón B del mando",
+                    "",
+                    "  ── Modo VERSUS ──",
+                    "  Presionando el botón de disparo se lanza un proyectil básico",
+                    "  en la dirección que mirás. Tiene cooldown corto (400 ms).",
+                    "  El proyectil puede ser bloqueado por el rival.",
+                    "",
+                    "  ── Modo COOPERATIVO ──",
+                    "  El cooperativo usa un sistema de CÁMARA / MIRA:",
+                    "    • Jugador 2 controla la mira con la palanca derecha o ← →.",
+                    "    • Presionar B / botón B lanza el disparo hacia la mira.",
+                    "    • Mantener V / botón A CARGA el disparo (más daño y velocidad).",
+                    "    • Los proyectiles cargados atraviesan escudos enemigos.",
+                    "    • El jugador 2 también puede DESVIAR proyectiles enemigos",
+                    "      golpeando en el momento exacto (parry).",
+                ],
+            },
+            {
+                title: "④ BLOQUEAR Y CARGAR ENERGÍA",
+                lines: [
+                    "  Jugador 1:  C   (teclado)   |   Botón A del mando",
+                    "  Jugador 2:  L   (teclado)   |   Botón A del mando",
+                    "",
+                    "  Esta tecla cumple DOS funciones según la distancia al rival:",
+                    "",
+                    "  CERCA del rival  →  BLOQUEAR",
+                    "    • Reduce el daño de golpes normales.",
+                    "    • No protege contra habilidades especiales poderosas.",
+                    "    • NO podés cargar energía mientras bloqueás.",
+                    "",
+                    "  LEJOS del rival  →  CARGAR ENERGÍA",
+                    "    • Mantener pulsado recarga la barra azul de energía.",
+                    "    • La energía es necesaria para las habilidades especiales.",
+                    "    • Si el rival se acerca mientras cargás, cambia a bloqueo.",
+                    "",
+                    "  ¡Administrá bien tu energía! Es un recurso limitado.",
+                ],
+            },
+            {
+                title: "⑤ HABILIDADES ESPECIALES (combos)",
+                lines: [
+                    "Todos los personajes tienen 3 habilidades que se activan con",
+                    "secuencias de dirección + Golpe (en menos de 1 segundo cada paso).",
+                    "",
+                    "  CHARLES  (guerrero explosivo)              Energía requerida:",
+                    "    Izq → Der + Golpe  →  Embestida ardiente     150 ⚡",
+                    "    Der → Izq + Golpe  →  Transformación (8 s)   300 ⚡",
+                    "    Der → Der + Golpe  →  Explosión retardada     180 ⚡",
+                    "",
+                    "  SOFÍA    (maga dimensional)                Energía requerida:",
+                    "    Izq → Der + Golpe  →  Láser atrayente        100 ⚡",
+                    "    Der → Izq + Golpe  →  Teletransporte          100 ⚡",
+                    "    Der → Der + Golpe  →  Lluvia de meteoritos    250 ⚡",
+                    "",
+                    "  FRANCHESCA  (ladrona de habilidades)      Energía requerida:",
+                    "    Der → Der + Golpe  →  Robar habilidad rival   variable",
+                    "    Izq → Izq + Golpe  →  Usar habilidad robada  variable",
+                    "    Der → Izq + Golpe  →  Desvanecimiento rápido  100 ⚡",
+                    "",
+                    "  MARIO    (luchador de fuerza bruta)        Energía requerida:",
+                    "    Izq → Der + Golpe  →  Carrera de fuego        120 ⚡",
+                    "    Der → Izq + Golpe  →  Lanzamiento potente     150 ⚡",
+                    "    Der → Der + Golpe  →  Giro ascendente         200 ⚡",
+                ],
+            },
+            {
+                title: "⑥ CONSEJOS FINALES",
+                lines: [
+                    "  • La barra ROJA es tu vida — si llega a 0, perdés.",
+                    "  • La barra AZUL es tu energía — necesaria para los especiales.",
+                    "  • Cargá energía cuando estés lejos y bloqueá cuando estés cerca.",
+                    "  • Las habilidades gastan energía: dosificalas.",
+                    "",
+                    "  • En COOPERATIVO comparten vida y energía.",
+                    "    Coordínense: uno cuerpo a cuerpo, el otro disparando.",
+                    "",
+                    "  • Cada personaje tiene un estilo único:",
+                    "    Charles  → daño explosivo y transformación ofensiva.",
+                    "    Sofía    → control del espacio y proyectiles mágicos.",
+                    "    Franchesca → robo de habilidades y movilidad.",
+                    "    Mario    → fuerza bruta y combos de impacto.",
+                    "",
+                    "  ¡Ahora estás listo para jugar! ¡Buena suerte!",
+                ],
+            },
+        ];
+
+        // ── Panel de contenido ──
+        const panelX = 60;
+        const panelY = 100;
+        const panelW = width - 120;
+
+        // Fondo del panel
+        this._panelBg = this.add.rectangle(panelX + panelW / 2, panelY + 20, panelW, height - 200, 0x000000, 0.55)
+            .setOrigin(0.5, 0).setDepth(10);
+
+        // Título del paso
+        this._stepTitle = this.add.text(panelX + panelW / 2, panelY + 30, "", {
+            font: "bold 26px Arial", color: "#ffd7a0", stroke: "#000", strokeThickness: 3
+        }).setOrigin(0.5, 0).setDepth(11);
+
+        // Cuerpo del paso
+        this._stepBody = this.add.text(panelX + 24, panelY + 76, "", {
+            font: "18px Arial", color: "#ffffff",
+            wordWrap: { width: panelW - 48 },
+            lineSpacing: 6,
+        }).setDepth(11);
+
+        // ── Barra de progreso ──
+        const dotY = height - 58;
+        this._dots = [];
+        const totalSteps = this._steps.length;
+        const dotSpacing = 36;
+        const dotsStartX = width / 2 - ((totalSteps - 1) * dotSpacing) / 2;
+
+        for (let d = 0; d < totalSteps; d++) {
+            const dot = this.add.circle(dotsStartX + d * dotSpacing, dotY, 8, 0x4b2e1f)
+                .setStrokeStyle(2, 0x8d6a44).setDepth(12);
+            this._dots.push(dot);
+        }
+
+        // ── Botones ANTERIOR / SIGUIENTE / VOLVER ──
+        const btnY = height - 38;
+        const btnColor = 0x4b2e1f;
+        const strokeC = 0x8d6a44;
+
+        const prevBtn = this.add.rectangle(panelX + 70, btnY, 140, 44, btnColor, 0.95)
+            .setStrokeStyle(2, strokeC).setInteractive({ useHandCursor: true }).setDepth(12);
+        this._prevText = this.add.text(panelX + 70, btnY, "◄ ANTERIOR", {
+            font: "18px Arial", color: "#ffe6c7"
+        }).setOrigin(0.5).setDepth(13);
+
+        const nextBtn = this.add.rectangle(width - panelX - 70, btnY, 140, 44, btnColor, 0.95)
+            .setStrokeStyle(2, strokeC).setInteractive({ useHandCursor: true }).setDepth(12);
+        this._nextText = this.add.text(width - panelX - 70, btnY, "SIGUIENTE ►", {
+            font: "18px Arial", color: "#ffe6c7"
+        }).setOrigin(0.5).setDepth(13);
+
+        const backBtn = this.add.rectangle(width / 2, btnY, 160, 44, 0x2f1b12, 0.95)
+            .setStrokeStyle(2, strokeC).setInteractive({ useHandCursor: true }).setDepth(12);
+        this.add.text(width / 2, btnY, "✕  VOLVER", {
+            font: "18px Arial", color: "#ffe6c7"
+        }).setOrigin(0.5).setDepth(13);
+
+        prevBtn.on("pointerdown", () => this._changeStep(-1));
+        nextBtn.on("pointerdown", () => this._changeStep(1));
+        backBtn.on("pointerdown", () => this.scene.start("Menu"));
+
+        // ── Teclado ──
+        this.input.keyboard.on("keydown-LEFT", () => this._changeStep(-1));
+        this.input.keyboard.on("keydown-RIGHT", () => this._changeStep(1));
+        this.input.keyboard.on("keydown-A", () => this._changeStep(-1));
+        this.input.keyboard.on("keydown-D", () => this._changeStep(1));
+        this.input.keyboard.on("keydown-ESC", () => this.scene.start("Menu"));
+        this.input.keyboard.on("keydown-BACKSPACE", () => this.scene.start("Menu"));
+
+        // ── Gamepad ──
+        this._padCooldown = 0;
+
+        // Mostrar primer paso
+        this._currentStep = 0;
+        this._renderStep();
+    }
+
+    _changeStep(dir) {
+        const next = this._currentStep + dir;
+        if (next < 0 || next >= this._steps.length) return;
+        this._currentStep = next;
+        this._renderStep();
+    }
+
+    _renderStep() {
+        const step = this._steps[this._currentStep];
+        if (!step) return;
+
+        this._stepTitle.setText(step.title);
+        this._stepBody.setText(step.lines.join("\n"));
+
+        // Actualizar dots
+        this._dots.forEach((dot, i) => {
+            dot.setFillStyle(i === this._currentStep ? 0xffc36a : 0x4b2e1f);
+        });
+
+        // Actualizar labels de botones
+        const isFirst = this._currentStep === 0;
+        const isLast = this._currentStep === this._steps.length - 1;
+        this._prevText.setAlpha(isFirst ? 0.3 : 1);
+        this._nextText.setText(isLast ? "FINAL  ✓" : "SIGUIENTE ►");
+    }
+
+    update(time) {
+        if (time < this._padCooldown) return;
+        const pads = this.input.gamepad ? this.input.gamepad.gamepads : [];
+        pads.forEach(pad => {
+            if (!pad) return;
+            const x = pad.axes.length > 0 ? pad.axes[0].getValue() : 0;
+            const dLeft  = pad.buttons[14] && pad.buttons[14].pressed;
+            const dRight = pad.buttons[15] && pad.buttons[15].pressed;
+            const bBack  = pad.buttons[1]  && pad.buttons[1].pressed;
+            if ((x < -0.6 || dLeft) && time > this._padCooldown) {
+                this._changeStep(-1);
+                this._padCooldown = time + 350;
+            } else if ((x > 0.6 || dRight) && time > this._padCooldown) {
+                this._changeStep(1);
+                this._padCooldown = time + 350;
+            }
+            if (bBack) this.scene.start("Menu");
+        });
     }
 }
 
