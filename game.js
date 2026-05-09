@@ -3895,6 +3895,45 @@ export class GameScene extends Phaser.Scene {
         this.setEnergyFor(player, cur + delta);
     }
 
+    layoutHudBars() {
+        const width = this.scale.width;
+        const barY = 30;
+        const margin = Math.max(32, Math.round(width * 0.06));
+        const centerGap = Math.max(100, Math.round(width * 0.16));
+        const barLength = Math.max(
+            220,
+            Math.min(
+                420,
+                Math.floor((width - margin * 2 - centerGap) / 2),
+            ),
+        );
+
+        this._barLength = barLength;
+
+        if (this.hpBars && this.hpBars[0]) {
+            this.hpBars[0].setPosition(margin, barY).setOrigin(0, 0.5);
+        }
+        if (this.hpBars && this.hpBars[1]) {
+            this.hpBars[1]
+                .setPosition(width - margin, barY)
+                .setOrigin(1, 0.5);
+        }
+        if (this.enBars && this.enBars[0]) {
+            this.enBars[0].setPosition(margin, barY + 28).setOrigin(0, 0.5);
+        }
+        if (this.enBars && this.enBars[1]) {
+            this.enBars[1]
+                .setPosition(width - margin, barY + 28)
+                .setOrigin(1, 0.5);
+        }
+
+        if (this.smallHPBar) {
+            const smallWidth = Math.floor(barLength * 0.5);
+            this.smallHPBar.setPosition(margin, barY + 46).setOrigin(0, 0.5);
+            this.smallHPBar.max = smallWidth;
+        }
+    }
+
     // Create invisible platforms/ground for a given map name
     createMapPlatforms(mapName, width, height) {
         // Si es Mapa 2 y tenemos tilemap, no crear plataformas invisibles
@@ -3910,55 +3949,49 @@ export class GameScene extends Phaser.Scene {
         this._platformData.length = 0; // clear
 
         if (mapName === "Mapa 1") {
-            // Apply a small downward offset for Mapa 1 to match the 'mapaprov' artwork
-            const yOffset = Math.round(height * 0.04); // 4% of screen height (moved further down per request)
-            const extraYOffset = Math.round(height * 0.05); // additional 5% for the lower three platforms
-
-            // Create a slight slope by splitting the ground into two segments with different Y
-
-            // Left ground - bajado (apply extra offset)
+            // Lower platforms span the whole width so the base occupies all the stage.
             this._platformData.push({
-                x: Math.round(width * 0.2),
-                y: Math.round(height * 0.97) + yOffset + extraYOffset,
-                w: Math.round(width * 0.56),
-                h: 40,
+                x: Math.round(width * 0.25),
+                y: Math.round(height * 0.84),
+                w: Math.round(width * 0.52),
+                h: 44,
             });
-            // Right ground - bajado (apply extra offset)
             this._platformData.push({
-                x: Math.round(width * 0.72),
-                y: Math.round(height * 0.99) + yOffset + extraYOffset,
-                w: Math.round(width * 0.56),
-                h: 40,
+                x: Math.round(width * 0.75),
+                y: Math.round(height * 0.84),
+                w: Math.round(width * 0.52),
+                h: 44,
+            });
+            this._platformData.push({
+                x: Math.round(width * 0.5),
+                y: Math.round(height * 0.835),
+                w: Math.round(width * 0.22),
+                h: 48,
             });
 
-            // Platforms near the left player
-            // left-most near player
             this._platformData.push({
                 x: Math.round(width * 0.12),
-                y: Math.round(height * 0.77) + yOffset,
+                y: Math.round(height * 0.70),
                 w: 160,
                 h: 24,
             });
-            // platform above player
             this._platformData.push({
                 x: Math.round(width * 0.32),
-                y: Math.round(height * 0.60) + yOffset,
+                y: Math.round(height * 0.54),
                 w: 160,
                 h: 24,
             });
 
-            // Middle platform (apply extra offset)
             this._platformData.push({
                 x: Math.round(width * 0.58),
-                y: Math.round(height * 0.92) + yOffset + extraYOffset,
+                y: Math.round(height * 0.81),
                 w: 580,
                 h: 90,
             });
 
-            // Small platform between players
             this._platformData.push({
                 x: Math.round(width * 0.56),
-                y: Math.round(height * 0.62) + yOffset,
+                y: Math.round(height * 0.56),
                 w: 120,
                 h: 24,
             });
@@ -4405,6 +4438,10 @@ export class GameScene extends Phaser.Scene {
                     newHeight / 2 + (this._bgYOffset || 0),
                 );
             }
+
+            // Keep lower platforms and HUD aligned when viewport size changes.
+            this.createMapPlatforms(this.selectedMap, gameSize.width, gameSize.height);
+            this.layoutHudBars();
         });
 
         // Platform debug tools removed for gameplay stability
@@ -4455,8 +4492,7 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const spawnY =
-            this.selectedMap === "Mapa 1" ? height * 0.85 : height - 40;
+        const spawnY = this.selectedMap === "Mapa 1" ? height * 0.66 : height * 0.62;
         const p1Sprite = this.physics.add
             .sprite(200, spawnY, p1KeyBase)
             .setCollideWorldBounds(true);
@@ -4655,16 +4691,16 @@ export class GameScene extends Phaser.Scene {
             (a, b) => this.handleProjectilePlayerOverlap(a, b, 1),
         );
 
-        // Barras más largas
+        // Barras dinámicas según ancho de pantalla
         const barY = 30;
-        const barLength = 400;
+        const barLength = this._barLength || 360;
         this.hpBars = [
             this.add
-                .rectangle(150, barY, barLength, 18, 0xff0000)
+                .rectangle(0, barY, barLength, 18, 0xff0000)
                 .setOrigin(0, 0.5),
             this.add
                 .rectangle(
-                    this.scale.width - 150,
+                    this.scale.width,
                     barY,
                     barLength,
                     18,
@@ -4674,11 +4710,11 @@ export class GameScene extends Phaser.Scene {
         ];
         this.enBars = [
             this.add
-                .rectangle(150, barY + 28, barLength, 12, 0x00ccff)
+                .rectangle(0, barY + 28, barLength, 12, 0x00ccff)
                 .setOrigin(0, 0.5),
             this.add
                 .rectangle(
-                    this.scale.width - 150,
+                    this.scale.width,
                     barY + 28,
                     barLength,
                     12,
@@ -4696,13 +4732,15 @@ export class GameScene extends Phaser.Scene {
             // small secondary HP bar under main player 1 bars (half-life representation)
             const smallWidth = barLength / 2;
             this.smallHPBar = this.add
-                .rectangle(150, barY + 46, smallWidth, 10, 0xff8800)
+                .rectangle(0, barY + 46, smallWidth, 10, 0xff8800)
                 .setOrigin(0, 0.5);
             this.smallHPBar.max = smallWidth;
             // initialize shared energy pool for coop
             this.maxEN = 500;
             this.sharedEnergy = this.maxEN;
         }
+
+        this.layoutHudBars();
 
         // Keyboard controls
         this.keysP1 = this.input.keyboard.addKeys({
@@ -5348,7 +5386,7 @@ export class GameScene extends Phaser.Scene {
         // Barras ajustadas a vida/energía máxima
         const maxHP = 1000,
             maxEN = this.maxEN || 500,
-            barLength = 400;
+            barLength = this._barLength || 360;
         this.hpBars[0].width = Math.max(
             0,
             (this.players[0].health / maxHP) * barLength,

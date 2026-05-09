@@ -10,10 +10,13 @@ if (!window.GOOGLE_CLIENT_ID) {
 import { LoginScene, Preloader, Menu, ControlsScene, ModeSelector, CharacterSelector, MapSelector, GameScene, VictoryScene, GameOver } from '../game.js';
 
 // Configuración principal de Phaser
+const BASE_WIDTH = 1024;
+const BASE_HEIGHT = 768;
+
 const gameConfig = {
     type: Phaser.AUTO,
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: BASE_WIDTH,
+    height: BASE_HEIGHT,
     parent: 'phaser-example',
     physics: {
         default: 'arcade',
@@ -26,7 +29,9 @@ const gameConfig = {
         gamepad: true
     },
     scale: {
-        mode: Phaser.Scale.RESIZE,
+        mode: Phaser.Scale.FIT,
+        width: BASE_WIDTH,
+        height: BASE_HEIGHT,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
     scene: [LoginScene, Preloader, Menu, ModeSelector, CharacterSelector, MapSelector, GameScene, ControlsScene, GameOver] // <-- LoginScene ahora es la primera
