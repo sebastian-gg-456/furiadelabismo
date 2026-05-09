@@ -2899,38 +2899,32 @@ export class ControlsScene extends Phaser.Scene {
 }
 
 // ─────────────────────────────────────────────
-// --- ESCENA TUTORIAL ---
+// --- ESCENA TUTORIAL (interactiva) ---
 // ─────────────────────────────────────────────
 export class TutorialScene extends Phaser.Scene {
     constructor() {
         super("TutorialScene");
-        this._currentStep = 0;
     }
 
     create() {
         const { width, height } = this.scale;
         ensureMenuMusic(this);
 
-        // ── FONDO simple color oscuro ──
+        // ── FONDO ──
         this.cameras.main.setBackgroundColor(0x0d1b2a);
-
-        // Fondo decorativo degradado
         const bgGrad = this.add.graphics();
         bgGrad.fillGradientStyle(0x0d1b2a, 0x0d1b2a, 0x1a3a4a, 0x1a3a4a, 1);
         bgGrad.fillRect(0, 0, width, height);
+        bgGrad.setDepth(-1);
 
-        // ── PLATAFORMA base ──
-        const groundH = 18;
-        const groundY = height - 90;
-        const ground = this.add.rectangle(width / 2, groundY, width, groundH, 0x5c3d1e);
-        this.physics.add.existing(ground, true);
+        // ── FÍSICA ──
+        this.physics.world.setBounds(0, 0, width, height + 200);
+        this.physics.world.setBoundsCollision(true, true, true, false);
 
-        // Plataforma flotante central (para demostrar salto)
-        const platW = 220;
-        const platY = groundY - 140;
-        const platform = this.add.rectangle(width / 2, platY, platW, 14, 0x7a5230);
-        this.physics.add.existing(platform, true);
-        // Borde decorativo
+        // ── PISO ──
+        this._groundY = height - 55;
+        this._groundRect = this.add.rectangle(width / 2, this._groundY + 10, width, 20, 0x5c3d1e).setDepth(2);
+        this.physics.add.existing(this._groundRect, true);
         const platBorder = this.add.rectangle(width / 2, platY, platW, 14).setStrokeStyle(2, 0xd4a96a, 1).setFillStyle(0, 0);
 
         // ── TÍTULO de la escena ──
@@ -3074,117 +3068,386 @@ export class TutorialScene extends Phaser.Scene {
             .setOrigin(0.5, 0).setDepth(10);
 
         // Título del paso
-        this._stepTitle = this.add.text(panelX + panelW / 2, panelY + 30, "", {
-            font: "bold 26px Arial", color: "#ffd7a0", stroke: "#000", strokeThickness: 3
-        }).setOrigin(0.5, 0).setDepth(11);
+        // ── PLATAFORMA flotante central ──
+        this._platY = this._groundY - 150;
+        this._platRect = this.add.rectangle(width / 2, this._platY, 240, 14, 0x7a5230).setDepth(2);
+        this.physics.add.existing(this._platRect, true);
+        this.add.rectangle(width / 2, this._platY, 240, 14)
+            .setStrokeStyle(2, 0xd4a96a).setFillStyle(0, 0).setDepth(3);
 
-        // Cuerpo del paso
-        this._stepBody = this.add.text(panelX + 24, panelY + 76, "", {
-            font: "18px Arial", color: "#ffffff",
-            wordWrap: { width: panelW - 48 },
-            lineSpacing: 6,
-        }).setDepth(11);
+        // ── HUD: título del paso ──
+        this._hudTitle = this.add.text(width / 2, 12, "", {
+            font: "bold 26px Arial", color: "#ffd7a0", stroke: "#000", strokeThickness: 4
+        }).setOrigin(0.5, 0).setDepth(60).setScrollFactor(0);
 
-        // ── Barra de progreso ──
-        const dotY = height - 58;
+        // ── HUD: instrucción breve ──
+        this._hudInstr = this.add.text(width / 2, 50, "", {
+            font: "15px Arial", color: "#bbccff", stroke: "#000", strokeThickness: 2,
+            wordWrap: { width: width - 80 }, align: "center"
+        }).setOrigin(0.5, 0).setDepth(60).setScrollFactor(0);
+
+        // ── HUD: caja de objetivo ──
+        const objBoxY = height - 68;
+        this.add.rectangle(width / 2, objBoxY, width - 30, 82, 0x000000, 0.75)
+            .setDepth(59).setScrollFactor(0);
+        this.add.text(20, objBoxY - 28, "OBJETIVO:", {
+            font: "bold 13px Arial", color: "#ffc36a"
+        }).setDepth(60).setScrollFactor(0);
+        this._hudObj = this.add.text(width / 2, objBoxY - 10, "", {
+            font: "bold 20px Arial", color: "#ffffff", stroke: "#000", strokeThickness: 3,
+            wordWrap: { width: width - 60 }, align: "center"
+        }).setOrigin(0.5, 0).setDepth(60).setScrollFactor(0);
+
+        // ── Puntos de progreso ──
+        this._totalSteps = 5;
         this._dots = [];
-        const totalSteps = this._steps.length;
-        const dotSpacing = 36;
-        const dotsStartX = width / 2 - ((totalSteps - 1) * dotSpacing) / 2;
-
-        for (let d = 0; d < totalSteps; d++) {
-            const dot = this.add.circle(dotsStartX + d * dotSpacing, dotY, 8, 0x4b2e1f)
-                .setStrokeStyle(2, 0x8d6a44).setDepth(12);
-            this._dots.push(dot);
+        const dotSpacing = 28;
+        const dotsStartX = width / 2 - ((this._totalSteps - 1) * dotSpacing) / 2;
+        for (let i = 0; i < this._totalSteps; i++) {
+            this._dots.push(
+                this.add.circle(dotsStartX + i * dotSpacing, height - 14, 6, 0x4b2e1f)
+                    .setStrokeStyle(2, 0x8d6a44).setDepth(60)
+            );
         }
 
-        // ── Botones ANTERIOR / SIGUIENTE / VOLVER ──
-        const btnY = height - 38;
-        const btnColor = 0x4b2e1f;
-        const strokeC = 0x8d6a44;
-
-        const prevBtn = this.add.rectangle(panelX + 70, btnY, 140, 44, btnColor, 0.95)
-            .setStrokeStyle(2, strokeC).setInteractive({ useHandCursor: true }).setDepth(12);
-        this._prevText = this.add.text(panelX + 70, btnY, "◄ ANTERIOR", {
-            font: "18px Arial", color: "#ffe6c7"
-        }).setOrigin(0.5).setDepth(13);
-
-        const nextBtn = this.add.rectangle(width - panelX - 70, btnY, 140, 44, btnColor, 0.95)
-            .setStrokeStyle(2, strokeC).setInteractive({ useHandCursor: true }).setDepth(12);
-        this._nextText = this.add.text(width - panelX - 70, btnY, "SIGUIENTE ►", {
-            font: "18px Arial", color: "#ffe6c7"
-        }).setOrigin(0.5).setDepth(13);
-
-        const backBtn = this.add.rectangle(width / 2, btnY, 160, 44, 0x2f1b12, 0.95)
-            .setStrokeStyle(2, strokeC).setInteractive({ useHandCursor: true }).setDepth(12);
-        this.add.text(width / 2, btnY, "✕  VOLVER", {
-            font: "18px Arial", color: "#ffe6c7"
-        }).setOrigin(0.5).setDepth(13);
-
-        prevBtn.on("pointerdown", () => this._changeStep(-1));
-        nextBtn.on("pointerdown", () => this._changeStep(1));
+        // ── Botón VOLVER ──
+        const backBtn = this.add.rectangle(width - 52, 24, 86, 34, 0x2f1b12, 0.95)
+            .setStrokeStyle(2, 0x8d6a44).setInteractive({ useHandCursor: true }).setDepth(61);
+        this.add.text(width - 52, 24, "VOLVER", { font: "15px Arial", color: "#ffe6c7" })
+            .setOrigin(0.5).setDepth(62);
         backBtn.on("pointerdown", () => this.scene.start("Menu"));
-
-        // ── Teclado ──
-        this.input.keyboard.on("keydown-LEFT", () => this._changeStep(-1));
-        this.input.keyboard.on("keydown-RIGHT", () => this._changeStep(1));
-        this.input.keyboard.on("keydown-A", () => this._changeStep(-1));
-        this.input.keyboard.on("keydown-D", () => this._changeStep(1));
         this.input.keyboard.on("keydown-ESC", () => this.scene.start("Menu"));
-        this.input.keyboard.on("keydown-BACKSPACE", () => this.scene.start("Menu"));
 
-        // ── Gamepad ──
-        this._padCooldown = 0;
+        // ── Jugadores ──
+        this._stepObjects = [];
+        this._projs = [];
+        this._createPlayers(width, height);
 
-        // Mostrar primer paso
-        this._currentStep = 0;
-        this._renderStep();
-    }
-
-    _changeStep(dir) {
-        const next = this._currentStep + dir;
-        if (next < 0 || next >= this._steps.length) return;
-        this._currentStep = next;
-        this._renderStep();
-    }
-
-    _renderStep() {
-        const step = this._steps[this._currentStep];
-        if (!step) return;
-
-        this._stepTitle.setText(step.title);
-        this._stepBody.setText(step.lines.join("\n"));
-
-        // Actualizar dots
-        this._dots.forEach((dot, i) => {
-            dot.setFillStyle(i === this._currentStep ? 0xffc36a : 0x4b2e1f);
+        // ── Teclas ──
+        this._keys = this.input.keyboard.addKeys({
+            p1Left: "A", p1Right: "D", p1Up: "W",
+            p1Hit: "X", p1Shoot: "B", p1Block: "C",
+            p2Left: "LEFT", p2Right: "RIGHT", p2Up: "UP",
+            p2Hit: "K", p2Shoot: "P", p2Block: "L",
         });
+        this._shootCd = { p1: 0, p2: 0 };
 
-        // Actualizar labels de botones
-        const isFirst = this._currentStep === 0;
-        const isLast = this._currentStep === this._steps.length - 1;
-        this._prevText.setAlpha(isFirst ? 0.3 : 1);
-        this._nextText.setText(isLast ? "FINAL  ✓" : "SIGUIENTE ►");
+        this._step = 0;
+        this._stepComplete = false;
+        this._showStep(0);
     }
 
-    update(time) {
-        if (time < this._padCooldown) return;
-        const pads = this.input.gamepad ? this.input.gamepad.gamepads : [];
-        pads.forEach(pad => {
-            if (!pad) return;
-            const x = pad.axes.length > 0 ? pad.axes[0].getValue() : 0;
-            const dLeft  = pad.buttons[14] && pad.buttons[14].pressed;
-            const dRight = pad.buttons[15] && pad.buttons[15].pressed;
-            const bBack  = pad.buttons[1]  && pad.buttons[1].pressed;
-            if ((x < -0.6 || dLeft) && time > this._padCooldown) {
-                this._changeStep(-1);
-                this._padCooldown = time + 350;
-            } else if ((x > 0.6 || dRight) && time > this._padCooldown) {
-                this._changeStep(1);
-                this._padCooldown = time + 350;
+    _createPlayers(width, height) {
+        const spawnY = this._groundY - 36;
+        const p1key = this.textures.exists("char0_idle") ? "char0_idle" : null;
+        const p2key = this.textures.exists("char1_idle") ? "char1_idle" : null;
+        if (p1key) {
+            this._p1 = this.physics.add.sprite(160, spawnY, p1key).setDepth(10);
+            try { this._p1.setDisplaySize(64, 64); } catch(e) {}
+            if (this._p1.body && this._p1.body.setSize) this._p1.body.setSize(36, 54).setOffset(14, 10);
+        } else {
+            const r = this.add.rectangle(160, spawnY, 40, 56, 0xff4444).setDepth(10);
+            this.physics.add.existing(r);
+            this._p1 = r;
+        }
+        if (this._p1.body) this._p1.body.setGravityY(500);
+        this._p1.setCollideWorldBounds(true);
+        if (p2key) {
+            this._p2 = this.physics.add.sprite(width - 160, spawnY, p2key).setDepth(10);
+            try { this._p2.setDisplaySize(64, 64); } catch(e) {}
+            if (this._p2.body && this._p2.body.setSize) this._p2.body.setSize(36, 54).setOffset(14, 10);
+        } else {
+            const r = this.add.rectangle(width - 160, spawnY, 40, 56, 0x4488ff).setDepth(10);
+            this.physics.add.existing(r);
+            this._p2 = r;
+        }
+        if (this._p2.body) this._p2.body.setGravityY(500);
+        this._p2.setCollideWorldBounds(true);
+        try { this._p2.setFlipX(true); } catch(e) {}
+        this.physics.add.collider(this._p1, this._groundRect);
+        this.physics.add.collider(this._p2, this._groundRect);
+        this.physics.add.collider(this._p1, this._platRect);
+        this.physics.add.collider(this._p2, this._platRect);
+        this._lbl1 = this.add.text(0, 0, "J1", { font: "bold 12px Arial", color: "#ffddaa", stroke: "#000", strokeThickness: 2 }).setOrigin(0.5).setDepth(15);
+        this._lbl2 = this.add.text(0, 0, "J2", { font: "bold 12px Arial", color: "#aaddff", stroke: "#000", strokeThickness: 2 }).setOrigin(0.5).setDepth(15);
+    }
+
+    _clearStepObjects() {
+        this._stepObjects.forEach(obj => { try { if (obj) obj.destroy(); } catch(e) {} });
+        this._stepObjects = [];
+        this._projs.forEach(p => { try { if (p.rect) p.rect.destroy(); } catch(e) {} });
+        this._projs = [];
+        this._dummy = null; this._dummyFace = null; this._dummyHPBar = null;
+        this._t1 = null; this._t2 = null;
+        this._enBar = null; this._enLabel = null;
+        this._seqKeys = null; this._arrow = null;
+    }
+
+    _showStep(n) {
+        this._clearStepObjects();
+        this._step = n;
+        this._stepComplete = false;
+        this._hitCount = 0; this._targetsHit = 0; this._energy = 0; this._comboBuffer = [];
+        const { width, height } = this.scale;
+        this._dots.forEach((d, i) => d.setFillStyle(i === n ? 0xffc36a : 0x4b2e1f));
+        const so = obj => { if (obj) this._stepObjects.push(obj); return obj; };
+        switch (n) {
+            case 0: {
+                this._hudTitle.setText("① MOVIMIENTO Y SALTO");
+                this._hudInstr.setText("J1: A / D  para moverse  •  W  para saltar\nJ2: ← / →  para moverse  •  ↑  para saltar   |   Mando: palanca izquierda + ↑");
+                this._hudObj.setText("¡Subí a la plataforma flotante del centro!");
+                so(this.add.rectangle(width / 2, this._platY - 22, 220, 42, 0x00ff66, 0.18).setStrokeStyle(3, 0x00ff66, 0.9).setDepth(5));
+                so(this.add.text(width / 2, this._platY - 22, "↑  SUBÍ AQUÍ  ↑", { font: "bold 13px Arial", color: "#00ff66", stroke: "#004400", strokeThickness: 2 }).setOrigin(0.5).setDepth(6));
+                this._arrow = so(this.add.text(0, 0, "↑", { font: "bold 30px Arial", color: "#ffff44", stroke: "#555500", strokeThickness: 2 }).setOrigin(0.5).setDepth(12));
+                break;
             }
-            if (bBack) this.scene.start("Menu");
+            case 1: {
+                this._hudTitle.setText("② GOLPE NORMAL");
+                this._hudInstr.setText("J1: X  para golpear  •  J2: K  para golpear   |   Mando: botón X\nAcercate al maniquí — en Versus golpeás al rival; en Cooperativo golpeás monstruos.");
+                this._hudObj.setText("¡Dale 3 golpes al maniquí!   [ 0 / 3 ]");
+                this._dummy = so(this.add.rectangle(width / 2, this._groundY - 32, 44, 60, 0xcc2222).setStrokeStyle(2, 0xff8888).setDepth(8));
+                this._dummyFace = so(this.add.text(width / 2, this._groundY - 44, "👾", { font: "26px Arial" }).setOrigin(0.5).setDepth(9));
+                so(this.add.rectangle(width / 2, this._groundY - 72, 56, 9, 0x440000).setDepth(9));
+                this._dummyHPBar = so(this.add.rectangle(width / 2 - 28, this._groundY - 72, 56, 9, 0xff3333).setOrigin(0, 0.5).setDepth(10));
+                break;
+            }
+            case 2: {
+                this._hudTitle.setText("③ DISPARO");
+                this._hudInstr.setText("J1: B  para disparar  •  J2: P  para disparar   |   Mando: botón B\nEn Cooperativo: uno apunta con la mira, el otro dispara (y puede CARGAR para más daño).");
+                this._hudObj.setText("¡Destruí los 2 objetivos con disparos!   [ 0 / 2 ]");
+                this._t1 = so(this.add.circle(width * 0.56, this._groundY - 95, 24, 0xff8800).setStrokeStyle(3, 0xffcc00).setDepth(8));
+                this._t1._alive = true;
+                so(this.add.text(width * 0.56, this._groundY - 95, "✕", { font: "bold 18px Arial", color: "#fff" }).setOrigin(0.5).setDepth(9));
+                this._t2 = so(this.add.circle(width * 0.74, this._groundY - 165, 24, 0xff8800).setStrokeStyle(3, 0xffcc00).setDepth(8));
+                this._t2._alive = true;
+                so(this.add.text(width * 0.74, this._groundY - 165, "✕", { font: "bold 18px Arial", color: "#fff" }).setOrigin(0.5).setDepth(9));
+                break;
+            }
+            case 3: {
+                this._hudTitle.setText("④ BLOQUEAR Y CARGAR ENERGÍA");
+                this._hudInstr.setText("J1: C   •   J2: L   |   Mando: botón A\nLejos del rival → mantener = CARGAR energía.   Cerca del rival → la misma tecla BLOQUEA.");
+                this._hudObj.setText("¡Cargá la energía al 70%!  (alejate del otro jugador y mantené C o L)");
+                const barX = width / 2 - 160, barW = 320, barY = this._platY - 52;
+                so(this.add.rectangle(width / 2, barY, barW, 22, 0x002244).setStrokeStyle(2, 0x0055aa).setDepth(10));
+                this._enBar = so(this.add.rectangle(barX, barY, 2, 22, 0x00aaff).setOrigin(0, 0.5).setDepth(11));
+                this._enBar._maxW = barW; this._enBar._x0 = barX;
+                this._enLabel = so(this.add.text(width / 2, barY - 22, "ENERGÍA: 0 %", { font: "bold 16px Arial", color: "#00ccff" }).setOrigin(0.5).setDepth(12));
+                break;
+            }
+            case 4: {
+                this._hudTitle.setText("⑤ HABILIDADES ESPECIALES");
+                this._hudInstr.setText("Cada personaje tiene 3 habilidades con secuencias de dirección + Golpe (en menos de 1 s).\nEj Charles → Izq+Der+Golpe = embestida   •   Der+Izq+Golpe = transformación   •   Der+Der+Golpe = explosión");
+                this._hudObj.setText("¡Ejecutá el combo!   Izq → Der → Golpe   ( A+D+X  ó  ← + → + K )");
+                const seqY = this._platY - 58;
+                so(this.add.rectangle(width / 2, seqY, 400, 52, 0x000000, 0.72).setStrokeStyle(2, 0x8d6a44).setDepth(10));
+                this._seqKeys = [
+                    so(this.add.text(width / 2 - 130, seqY, "◄ IZQ", { font: "bold 20px Arial", color: "#555577" }).setOrigin(0.5).setDepth(11)),
+                    so(this.add.text(width / 2,       seqY, "► DER", { font: "bold 20px Arial", color: "#555577" }).setOrigin(0.5).setDepth(11)),
+                    so(this.add.text(width / 2 + 130, seqY, "✊ GOLPE", { font: "bold 20px Arial", color: "#555577" }).setOrigin(0.5).setDepth(11)),
+                ];
+                break;
+            }
+        }
+    }
+
+    _hitDummy() {
+        if (!this._dummy || this._stepComplete) return;
+        this._hitCount++;
+        try { this._dummy.setFillStyle(0xffffff); } catch(e) {}
+        this.time.delayedCall(80, () => { try { if (this._dummy) this._dummy.setFillStyle(0xcc2222); } catch(e) {} });
+        this.tweens.add({ targets: [this._dummy, this._dummyFace], x: `+=${Phaser.Math.Between(-7, 7)}`, duration: 55, yoyo: true, repeat: 2 });
+        if (this._dummyHPBar) this._dummyHPBar.width = 56 * Math.max(0, 1 - this._hitCount / 3);
+        this._hudObj.setText(`¡Dale 3 golpes al maniquí!   [ ${this._hitCount} / 3 ]`);
+        if (this._hitCount >= 3) {
+            try { this._dummy.setFillStyle(0xffff00); } catch(e) {}
+            this.time.delayedCall(120, () => this._complete());
+        }
+    }
+
+    _hitTarget(t) {
+        if (!t || !t._alive || this._stepComplete) return;
+        t._alive = false;
+        this._targetsHit++;
+        this.cameras.main.flash(110, 255, 160, 0);
+        this.tweens.add({ targets: t, scaleX: 2.2, scaleY: 2.2, alpha: 0, duration: 260, onComplete: () => { try { t.destroy(); } catch(e) {} } });
+        this._hudObj.setText(`¡Destruí los 2 objetivos con disparos!   [ ${this._targetsHit} / 2 ]`);
+        if (this._targetsHit >= 2) this._complete();
+    }
+
+    _complete() {
+        if (this._stepComplete) return;
+        this._stepComplete = true;
+        this.cameras.main.flash(320, 80, 255, 80);
+        const { width, height } = this.scale;
+        const done = this.add.text(width / 2, height / 2 - 20, "¡COMPLETADO! ✓", {
+            font: "bold 52px Arial", color: "#00ff88", stroke: "#004422", strokeThickness: 6
+        }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
+        this.tweens.add({
+            targets: done, scaleX: 1.08, scaleY: 1.08, duration: 260, yoyo: true,
+            onComplete: () => {
+                this.tweens.add({
+                    targets: done, alpha: 0, duration: 380, delay: 520,
+                    onComplete: () => {
+                        try { done.destroy(); } catch(e) {}
+                        if (this._step < this._totalSteps - 1) { this._showStep(this._step + 1); }
+                        else { this._showFinal(); }
+                    }
+                });
+            }
         });
+    }
+
+    _showFinal() {
+        this._clearStepObjects();
+        const { width, height } = this.scale;
+        this._hudTitle.setText("🏆  ¡TUTORIAL COMPLETADO!");
+        this._hudInstr.setText("Ya conocés todas las mecánicas. ¡Hora de jugar!");
+        this._hudObj.setText("¡Estás listo para la Furia del Abismo!");
+        this._dots.forEach(d => d.setFillStyle(0xffc36a));
+        const btn = this.add.rectangle(width / 2, height / 2, 270, 64, 0x1e3a12, 0.95)
+            .setStrokeStyle(3, 0x5a8a34).setInteractive({ useHandCursor: true }).setDepth(60);
+        this.add.text(width / 2, height / 2, "IR AL MENÚ  →", { font: "bold 28px Arial", color: "#c8ffb0" }).setOrigin(0.5).setDepth(61);
+        btn.on("pointerdown", () => this.scene.start("Menu"));
+        this._stepObjects.push(btn);
+    }
+
+    _spawnProj(x, y, dir) {
+        const rect = this.add.rectangle(x, y, 18, 8, 0xffcc44).setDepth(15);
+        this._projs.push({ rect, vx: dir * 600 });
+    }
+
+    _updateProjectiles(width) {
+        const dt = 1 / 60;
+        const toRemove = [];
+        this._projs.forEach((p, idx) => {
+            if (!p.rect || !p.rect.active) { toRemove.push(idx); return; }
+            p.rect.x += p.vx * dt;
+            if (p.rect.x < -40 || p.rect.x > width + 40) { toRemove.push(idx); return; }
+            [this._t1, this._t2].forEach(t => {
+                if (!t || !t._alive) return;
+                if (Phaser.Math.Distance.Between(p.rect.x, p.rect.y, t.x, t.y) < 32) {
+                    this._hitTarget(t); toRemove.push(idx);
+                }
+            });
+        });
+        toRemove.slice().reverse().forEach(i => {
+            try { if (this._projs[i] && this._projs[i].rect) this._projs[i].rect.destroy(); } catch(e) {}
+            this._projs.splice(i, 1);
+        });
+    }
+
+    update(time, delta) {
+        if (!this._p1 || !this._p2) return;
+        const { width } = this.scale;
+        const SPEED = 230, JUMP = -480;
+        const pad1 = this.input.gamepad ? (this.input.gamepad.gamepads[0] || null) : null;
+        const pad2 = this.input.gamepad ? (this.input.gamepad.gamepads[1] || null) : null;
+        const p1g = this._p1.body && this._p1.body.blocked && this._p1.body.blocked.down;
+        const ax1 = pad1 && pad1.axes[0] ? pad1.axes[0].getValue() : 0;
+        if (this._keys.p1Left.isDown || ax1 < -0.3) { this._p1.body.setVelocityX(-SPEED); try { this._p1.setFlipX(true); } catch(e) {} }
+        else if (this._keys.p1Right.isDown || ax1 > 0.3) { this._p1.body.setVelocityX(SPEED); try { this._p1.setFlipX(false); } catch(e) {} }
+        else { this._p1.body.setVelocityX(0); }
+        const pad1Up = pad1 && ((pad1.buttons[12] && pad1.buttons[12].pressed) || (pad1.axes[1] && pad1.axes[1].getValue() < -0.5));
+        if ((Phaser.Input.Keyboard.JustDown(this._keys.p1Up) || (pad1Up && !this._pad1WasUp)) && p1g) this._p1.body.setVelocityY(JUMP);
+        this._pad1WasUp = pad1Up;
+        const p2g = this._p2.body && this._p2.body.blocked && this._p2.body.blocked.down;
+        const ax2 = pad2 && pad2.axes[0] ? pad2.axes[0].getValue() : 0;
+        if (this._keys.p2Left.isDown || ax2 < -0.3) { this._p2.body.setVelocityX(-SPEED); try { this._p2.setFlipX(true); } catch(e) {} }
+        else if (this._keys.p2Right.isDown || ax2 > 0.3) { this._p2.body.setVelocityX(SPEED); try { this._p2.setFlipX(false); } catch(e) {} }
+        else { this._p2.body.setVelocityX(0); }
+        const pad2Up = pad2 && ((pad2.buttons[12] && pad2.buttons[12].pressed) || (pad2.axes[1] && pad2.axes[1].getValue() < -0.5));
+        if ((Phaser.Input.Keyboard.JustDown(this._keys.p2Up) || (pad2Up && !this._pad2WasUp)) && p2g) this._p2.body.setVelocityY(JUMP);
+        this._pad2WasUp = pad2Up;
+        if (this._lbl1) { this._lbl1.x = this._p1.x; this._lbl1.y = this._p1.y - 44; }
+        if (this._lbl2) { this._lbl2.x = this._p2.x; this._lbl2.y = this._p2.y - 44; }
+        if (this._arrow) { this._arrow.x = this._p1.x; this._arrow.y = this._p1.y - 62 + Math.sin(time / 220) * 6; }
+        if (this._stepComplete) { this._updateProjectiles(width); return; }
+        switch (this._step) {
+            case 0: {
+                const on1 = this._p1.y < this._platY + 18 && Math.abs(this._p1.x - width / 2) < 135;
+                const on2 = this._p2.y < this._platY + 18 && Math.abs(this._p2.x - width / 2) < 135;
+                if (on1 || on2) this._complete();
+                break;
+            }
+            case 1: {
+                const hit1 = Phaser.Input.Keyboard.JustDown(this._keys.p1Hit) || (pad1 && pad1.buttons[2] && pad1.buttons[2].pressed && !this._p1HitLast);
+                const hit2 = Phaser.Input.Keyboard.JustDown(this._keys.p2Hit) || (pad2 && pad2.buttons[2] && pad2.buttons[2].pressed && !this._p2HitLast);
+                this._p1HitLast = pad1 && pad1.buttons[2] && pad1.buttons[2].pressed;
+                this._p2HitLast = pad2 && pad2.buttons[2] && pad2.buttons[2].pressed;
+                const dX = this._dummy ? this._dummy.x : 9999, dY = this._dummy ? this._dummy.y : 9999;
+                if (hit1 && Phaser.Math.Distance.Between(this._p1.x, this._p1.y, dX, dY) < 120) this._hitDummy();
+                if (hit2 && Phaser.Math.Distance.Between(this._p2.x, this._p2.y, dX, dY) < 120) this._hitDummy();
+                break;
+            }
+            case 2: {
+                const s1 = Phaser.Input.Keyboard.JustDown(this._keys.p1Shoot) || (pad1 && pad1.buttons[1] && pad1.buttons[1].pressed && !this._p1ShootLast);
+                const s2 = Phaser.Input.Keyboard.JustDown(this._keys.p2Shoot) || (pad2 && pad2.buttons[1] && pad2.buttons[1].pressed && !this._p2ShootLast);
+                this._p1ShootLast = pad1 && pad1.buttons[1] && pad1.buttons[1].pressed;
+                this._p2ShootLast = pad2 && pad2.buttons[1] && pad2.buttons[1].pressed;
+                if (s1 && time > this._shootCd.p1) { this._shootCd.p1 = time + 350; const dir = this._p1.flipX ? -1 : 1; this._spawnProj(this._p1.x + dir * 28, this._p1.y - 8, dir); }
+                if (s2 && time > this._shootCd.p2) { this._shootCd.p2 = time + 350; const dir = this._p2.flipX ? -1 : 1; this._spawnProj(this._p2.x + dir * 28, this._p2.y - 8, dir); }
+                this._updateProjectiles(width);
+                break;
+            }
+            case 3: {
+                const dist = Phaser.Math.Distance.Between(this._p1.x, this._p1.y, this._p2.x, this._p2.y);
+                const far = dist > 180;
+                const c1 = far && (this._keys.p1Block.isDown || (pad1 && pad1.buttons[0] && pad1.buttons[0].pressed));
+                const c2 = far && (this._keys.p2Block.isDown || (pad2 && pad2.buttons[0] && pad2.buttons[0].pressed));
+                if (c1 || c2) {
+                    this._energy = Math.min(100, this._energy + (delta / 1000) * 25);
+                    const tinter = c1 ? this._p1 : this._p2;
+                    try { tinter.setTint(0x88ccff); } catch(e) {}
+                    this.time.delayedCall(80, () => { try { if (tinter) tinter.clearTint(); } catch(e) {} });
+                }
+                const pct = this._energy / 100;
+                if (this._enBar) this._enBar.width = Math.max(2, this._enBar._maxW * pct);
+                if (this._enLabel) this._enLabel.setText(`ENERGÍA: ${Math.floor(this._energy)} %`);
+                if (this._energy >= 70) this._complete();
+                break;
+            }
+            case 4: {
+                let inp1 = null, inp2 = null;
+                if (Phaser.Input.Keyboard.JustDown(this._keys.p1Left)) inp1 = "L";
+                else if (Phaser.Input.Keyboard.JustDown(this._keys.p1Right)) inp1 = "R";
+                else if (Phaser.Input.Keyboard.JustDown(this._keys.p1Hit)) inp1 = "X";
+                if (Phaser.Input.Keyboard.JustDown(this._keys.p2Left)) inp2 = "L";
+                else if (Phaser.Input.Keyboard.JustDown(this._keys.p2Right)) inp2 = "R";
+                else if (Phaser.Input.Keyboard.JustDown(this._keys.p2Hit)) inp2 = "X";
+                if (pad1 && pad1.connected) {
+                    const a = pad1.axes[0] ? pad1.axes[0].getValue() : 0;
+                    if (a < -0.7 && !this._pad1LL) inp1 = "L"; else if (a > 0.7 && !this._pad1RL) inp1 = "R";
+                    const xp = pad1.buttons[2] && pad1.buttons[2].pressed;
+                    if (xp && !this._pad1XL) inp1 = "X";
+                    this._pad1LL = a < -0.7; this._pad1RL = a > 0.7; this._pad1XL = xp;
+                }
+                if (pad2 && pad2.connected) {
+                    const a = pad2.axes[0] ? pad2.axes[0].getValue() : 0;
+                    if (a < -0.7 && !this._pad2LL) inp2 = "L"; else if (a > 0.7 && !this._pad2RL) inp2 = "R";
+                    const xp = pad2.buttons[2] && pad2.buttons[2].pressed;
+                    if (xp && !this._pad2XL) inp2 = "X";
+                    this._pad2LL = a < -0.7; this._pad2RL = a > 0.7; this._pad2XL = xp;
+                }
+                [inp1, inp2].forEach(inp => {
+                    if (!inp) return;
+                    const last = this._comboBuffer[this._comboBuffer.length - 1];
+                    if (!last || time - last.t < 1200) { this._comboBuffer.push({ k: inp, t: time }); if (this._comboBuffer.length > 3) this._comboBuffer.shift(); }
+                    else { this._comboBuffer = [{ k: inp, t: time }]; }
+                    const idxMap = { L: 0, R: 1, X: 2 };
+                    const si = idxMap[inp];
+                    if (this._seqKeys && si !== undefined) {
+                        const sk = this._seqKeys[si];
+                        try { sk.setColor("#ffff00"); } catch(e) {}
+                        this.time.delayedCall(320, () => { try { if (sk && !this._stepComplete) sk.setColor("#555577"); } catch(e) {} });
+                    }
+                    if (this._comboBuffer.length === 3 && this._comboBuffer[0].k === "L" && this._comboBuffer[1].k === "R" && this._comboBuffer[2].k === "X") {
+                        if (this._seqKeys) this._seqKeys.forEach(sk => { try { sk.setColor("#00ff88"); } catch(e) {} });
+                        this._complete();
+                    }
+                });
+                break;
+            }
+        }
     }
 }
 
@@ -3203,132 +3466,6 @@ export class ModeSelector extends Phaser.Scene {
         } catch (e) {}
 
         const { width, height } = this.scale;
-
-        this.selectedIndex = 0;
-        this.buttons = [];
-
-        this.cameras.main.setBackgroundColor(0x001933);
-
-        // -------------------------
-        // Estilo (igual al resto)
-        // -------------------------
-
-        const buttonSize = 260; // más grandes
-        const spacing = 140;
-
-        const buttonColor = 0x4b2e1f;
-        const strokeColor = 0x8d6a44;
-        const textColor   = "#ffe6c7";
-
-        const centerX = width / 2;
-        const centerY = height / 2 + 40;
-
-        // -------------------------
-        // Título
-        // -------------------------
-
-        this.add.text(
-            width / 2,
-            70,
-            isEnglish ? "SELECT MODE" : "SELECCIONAR MODO",
-            {
-                font: "48px Arial",
-                color: "#d8c19a"
-            }
-        ).setOrigin(0.5);
-
-        // -------------------------
-        // Botones
-        // -------------------------
-
-        const versusX = centerX - buttonSize / 2 - spacing / 2;
-        const coopX   = centerX + buttonSize / 2 + spacing / 2;
-
-        const versusButton = this.add.rectangle(
-            versusX,
-            centerY,
-            buttonSize,
-            buttonSize,
-            buttonColor,
-            0.95
-        )
-        .setInteractive({ useHandCursor: true })
-        .setStrokeStyle(3, strokeColor);
-
-        const coopButton = this.add.rectangle(
-            coopX,
-            centerY,
-            buttonSize,
-            buttonSize,
-            buttonColor,
-            0.95
-        )
-        .setInteractive({ useHandCursor: true })
-        .setStrokeStyle(3, strokeColor);
-
-        // sombra suave
-        const vsShadow = this.add.rectangle(
-            versusX + 6,
-            centerY + 6,
-            buttonSize,
-            buttonSize,
-            0x000000,
-            0.25
-        ).setDepth(-1);
-
-        const coShadow = this.add.rectangle(
-            coopX + 6,
-            centerY + 6,
-            buttonSize,
-            buttonSize,
-            0x000000,
-            0.25
-        ).setDepth(-1);
-
-        const t1 = this.add.text(
-            versusButton.x,
-            versusButton.y,
-            "VERSUS",
-            {
-                font: "36px Arial",
-                color: textColor
-            }
-        ).setOrigin(0.5);
-
-        const t2 = this.add.text(
-            coopButton.x,
-            coopButton.y,
-            "CO-OP",
-            {
-                font: "36px Arial",
-                color: textColor
-            }
-        ).setOrigin(0.5);
-
-        // -------------------------
-        // Botones lógicos
-        // -------------------------
-
-        this.buttons.push({
-            rect: versusButton,
-            mode: "versus",
-            callback: () => this.cleanupAndStart(
-                "CharacterSelector",
-                { mode: "versus" }
-            )
-        });
-
-        this.buttons.push({
-            rect: coopButton,
-            mode: "cooperativo",
-            callback: () => this.cleanupAndStart(
-                "CharacterSelector",
-                { mode: "cooperativo" }
-            )
-        });
-
-        // -------------------------
-        // Selector
         // -------------------------
 
         this.selector = this.add.rectangle(
