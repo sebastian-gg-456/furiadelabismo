@@ -1,48 +1,57 @@
-// src/services/translations.js
-const PROJECT_ID = import.meta.env.VITE_TRADUCILA_PROJECT_ID || import.meta.env.VITE_TRADUCILA_PROJECT || null;
+import { DE, EN, ES, PT } from "../enums/languages.js";
+
+const PROJECT_ID = "55c0d661-e336-4afb-82f9-fbe78381e1ab";
+
 let translations = null;
 
+let language = ES;
+
+export function getCurrentLanguage() {
+  return language;
+}
+
+export function getSupportedLanguages() {
+  return [ES, EN, PT, DE];
+}
+
 export async function getTranslations(lang, callback) {
+  localStorage.clear();
+
   translations = null;
-  // default Spanish (es) does not require fetching
-  if (!lang || lang === 'es') {
-    if (callback) callback();
-    return;
+
+  language = lang;
+
+  if (language === ES) {
+    return callback ? callback() : false;
   }
 
-  if (!PROJECT_ID) {
-    console.warn('VITE_TRADUCILA_PROJECT_ID not set. Cannot fetch translations.');
-    if (callback) callback();
-    return;
-  }
+  return await fetch(
+    `https://traducila.vercel.app/api/translations/${PROJECT_ID}/${language}`
+  )
+    .then((response) => response.json())
+    .then((data) => {
+      localStorage.setItem("translations", JSON.stringify(data));
 
-  try {
-    const res = await fetch(`https://traducila.vercel.app/api/translations/${PROJECT_ID}/${lang}`);
-    const data = await res.json();
-    translations = data;
-    try { localStorage.setItem('translations', JSON.stringify(data)); } catch(e) {}
-    if (callback) callback();
-  } catch (e) {
-    console.warn('Failed to fetch translations', e);
-    if (callback) callback();
-  }
+      translations = data;
+
+      if (callback) callback();
+    });
 }
 
 export function getPhrase(key) {
-  if (!key) return '';
   if (!translations) {
-    try {
-      const locals = localStorage.getItem('translations');
-      translations = locals ? JSON.parse(locals) : null;
-    } catch (e) {
-      translations = null;
-    }
+    const locals = localStorage.getItem("translations");
+
+    translations = locals ? JSON.parse(locals) : null;
   }
 
   let phrase = key;
+
   const keys = translations?.data?.words;
+
   if (keys && Array.isArray(keys)) {
     const translation = keys.find((item) => item.key === key);
+
     if (translation && translation.translate) {
       phrase = translation.translate;
     }

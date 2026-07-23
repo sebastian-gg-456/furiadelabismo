@@ -4,7 +4,12 @@
 // ========================
 
 // Gestión de sesiones con localStorage
-import { getTranslations, getPhrase } from './src/services/translations.js';
+import {
+    getTranslations,
+    getPhrase,
+    getCurrentLanguage,
+} from './src/services/translations.js';
+import { ES, EN } from './src/enums/languages.js';
 const SessionManager = {
     // Obtener todas las sesiones guardadas
     getAllSessions() {
@@ -125,8 +130,19 @@ const SessionManager = {
 // ========================
 // --- VARIABLES GLOBALES ---
 // ========================
+let currentLanguage = ES;
 let isEnglish = false;
 let currentPlayer = null; // Sesión del jugador actual
+
+function syncLegacyLanguageFlag() {
+    isEnglish = currentLanguage === EN;
+}
+
+async function setGameLanguage(lang, callback) {
+    currentLanguage = (lang || ES).toLowerCase();
+    syncLegacyLanguageFlag();
+    return getTranslations(currentLanguage, callback);
+}
 
 // Utility: safe get pad
 function getPad(idx, scene) {
@@ -2271,13 +2287,18 @@ export class Menu extends Phaser.Scene {
         this.selectedIndex = 0;
         this.buttons = [];
 
+        currentLanguage = getCurrentLanguage();
+        syncLegacyLanguageFlag();
+
         this.updateTexts = () => {
-            // Use getPhrase to resolve translations from TraduciLa (keys are expected in Spanish)
+            // Resolve visible labels using TraduciLa keys in Spanish.
+            currentLanguage = getCurrentLanguage();
+            syncLegacyLanguageFlag();
             this.title.setText(getPhrase('La Furia del Abismo'));
             this.playText.setText(getPhrase('Jugar'));
-            this.langText.setText(getPhrase('Idioma'));
+            this.langText.setText(`${getPhrase('Idioma')}: ${currentLanguage.toUpperCase()}`);
             this.controlsText.setText(getPhrase('Controles'));
-            if (this.tutorialText) this.tutorialText.setText(isEnglish ? 'Tutorial' : 'Tutorial');
+            if (this.tutorialText) this.tutorialText.setText(getPhrase('Tutorial'));
         };
 
         this.cameras.main.setBackgroundColor(0x001d33);
@@ -2287,7 +2308,7 @@ export class Menu extends Phaser.Scene {
         this.title = this.add.text(
             width / 2,
             80,
-            isEnglish ? "THE FURY OF THE ABYSS" : "LA FURIA DEL ABISMO",
+            getPhrase('La Furia del Abismo'),
             {
                 font: "72px Arial",
                 color: "#ffd7a0"
@@ -2311,7 +2332,7 @@ export class Menu extends Phaser.Scene {
 
         playButton.setStrokeStyle(2, 0x8d6a44);
 
-        this.playText = this.add.text(width / 2, startY, isEnglish ? "PLAY" : "JUGAR", {
+        this.playText = this.add.text(width / 2, startY, getPhrase('Jugar'), {
             font: "28px Arial",
             color: "#ffe6c7"
         }).setOrigin(0.5);
@@ -2330,19 +2351,18 @@ export class Menu extends Phaser.Scene {
 
         langButton.setStrokeStyle(2, 0x7a5637);
 
-        this.langText = this.add.text(width / 2, startY, isEnglish ? "LANGUAGE" : "IDIOMA", {
+        this.langText = this.add.text(width / 2, startY, `${getPhrase('Idioma')}: ${currentLanguage.toUpperCase()}`, {
             font: "28px Arial",
             color: "#ffe0b3"
         }).setOrigin(0.5);
 
         this.buttons.push({
             rect: langButton,
-            callback: () => {
-                isEnglish = !isEnglish;
-                const lang = isEnglish ? 'en' : 'es';
-                // Fetch translations when switching language; update texts when ready
+            callback: async () => {
+                const nextLanguage = currentLanguage === ES ? EN : ES;
+
                 try {
-                    getTranslations(lang, () => {
+                    await setGameLanguage(nextLanguage, () => {
                         this.updateTexts();
                     });
                 } catch (e) {
@@ -2360,7 +2380,7 @@ export class Menu extends Phaser.Scene {
 
         controlsButton.setStrokeStyle(2, 0x6b4a30);
 
-        this.controlsText = this.add.text(width / 2, startY, isEnglish ? "CONTROLS" : "CONTROLES", {
+        this.controlsText = this.add.text(width / 2, startY, getPhrase('Controles'), {
             font: "28px Arial",
             color: "#ffe6c7"
         }).setOrigin(0.5);
@@ -2379,7 +2399,7 @@ export class Menu extends Phaser.Scene {
 
         tutorialButton.setStrokeStyle(2, 0x5a8a34);
 
-        this.tutorialText = this.add.text(width / 2, startY, isEnglish ? "TUTORIAL" : "TUTORIAL", {
+        this.tutorialText = this.add.text(width / 2, startY, getPhrase('Tutorial'), {
             font: "28px Arial",
             color: "#c8ffb0"
         }).setOrigin(0.5);
@@ -2418,6 +2438,10 @@ export class Menu extends Phaser.Scene {
                 pad._aPressed =
                 pad._bPressed =
                     false;
+        });
+
+        setGameLanguage(ES, () => {
+            this.updateTexts();
         });
     }
 
